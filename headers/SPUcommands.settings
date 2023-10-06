@@ -1,0 +1,23 @@
+enum Command
+{
+    Halt_c = 0,
+    Push_c,
+    Pop_c,
+    In_c,
+    Out_c,
+    Add_c,
+    Subtract_c,
+    Multiply_c,
+    Divide_c,
+    Sqrt_c,
+    Sin_c,
+    Cos_c,
+};
+
+enum Register
+{
+    rax = 1,
+    rbx,
+    rcx,
+    rdx,
+};
