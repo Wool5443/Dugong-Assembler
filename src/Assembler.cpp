@@ -73,6 +73,8 @@ ErrorCode Compile(const char* codeFilePath, const char* byteCodeOutPath)
             return ERROR_SYNTAX;
         }
 
+
+
         CommandResult resCom = _translateRawCommand(rawCommand);
 
         if (resCom.error)
@@ -114,13 +116,7 @@ ErrorCode _writeCommand(FILE* outFile, const String* curLine, Command command, i
                 if (sscanf(curLine->text + commandLength + 1, "r%c%n", &regType, &argLength) != 1)
                     return ERROR_SYNTAX;
 
-                String stringAfterArg = 
-                {
-                    .text   = curLine->text   + commandLength + argLength + 2,
-                    .length = curLine->length - commandLength - argLength - 2,
-                };
-
-                if (!StringIsEmptyChars(&stringAfterArg))
+                if (!StringIsEmptyChars(curLine->text + commandLength + argLength + 2, 0))
                     return ERROR_SYNTAX;
                 
                 fprintf(outFile, "%u %u %u\n", (uint)command, (uint)RegisterArg, regType - 'a' + 1);

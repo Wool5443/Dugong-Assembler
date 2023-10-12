@@ -171,4 +171,14 @@ void StringPrint(FILE* file, const char* string, char terminator);
 */
 int StringIsEmptyChars(const String* string);
 
+/**
+ * @brief Checks if the input char[] consists entirely of empty space chars.
+ * 
+ * @param [in] string - the string to check.
+ * @param [in] terminator - what the string ends with.
+ * 
+ * @return 1 if true, 0 if false.
+*/
+int StringIsEmptyChars(const char* string, char terminator);
+
 #endif
