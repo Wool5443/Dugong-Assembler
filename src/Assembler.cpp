@@ -36,7 +36,7 @@ struct CommandResult
 
 CommandResult _translateRawCommand(uint rawCommand);
 
-ErrorCode _writeCommand(FILE* outFile, String* curLine, Command command, uint commandLength);
+ErrorCode _writeCommand(FILE* outFile, const String* curLine, Command command, int commandLength);
 
 ErrorCode Compile(const char* codeFilePath, const char* byteCodeOutPath)
 {
@@ -48,23 +48,26 @@ ErrorCode Compile(const char* codeFilePath, const char* byteCodeOutPath)
 
     Text code = CreateText(codeFilePath, '\n');
 
-    for (size_t ip = 0; ip < code.numberOfLines; ip++)
+    for (size_t position = 0; position < code.numberOfLines; position++)
     {
-        String curLine = code.lines[ip];
+        const String* curLine = &(code.lines[position]);
 
-        if (*curLine.text == '\n')
+        char* endLinePtr = (char*)strchr(curLine->text, '\n');
+        if (endLinePtr)
+            *endLinePtr = 0;
+
+        char* commentPtr = (char*)strchr(curLine->text, ';');
+        if (commentPtr)
+            *commentPtr = 0;
+
+        if (StringIsEmptyChars(curLine))
             continue;
-
-        *(char*)strchr(curLine.text, '\n') = 0;
-
-        char* commentPtr = (char*)strchr(curLine.text, ';');
-        *commentPtr = 0;
 
         uint rawCommand = 0;
 
-        uint commandLength = 0;
+        int commandLength = 0;
 
-        if (sscanf(curLine.text, "%4s%n", (char*)&rawCommand, &commandLength) != 2)
+        if (sscanf(curLine->text, "%4s%n", (char*)&rawCommand, &commandLength) != 1)
         {
             DestroyText(&code);
             return ERROR_SYNTAX;
@@ -72,38 +75,69 @@ ErrorCode Compile(const char* codeFilePath, const char* byteCodeOutPath)
 
         CommandResult resCom = _translateRawCommand(rawCommand);
 
-        RETURN_ERROR(resCom.error);
+        if (resCom.error)
+        {
+            DestroyText(&code);
+            return resCom.error;
+        }
 
         Command command = resCom.command;
 
-        RETURN_ERROR(_writeCommand(outFile, &curLine, command, commandLength));
+        ErrorCode writeError = _writeCommand(outFile, curLine, command, commandLength);
+        
+        if (writeError)
+        {
+            DestroyText(&code);
+            return writeError;
+        }
     }
+
+    fclose(outFile);
+    DestroyText(&code);
 
     return EVERYTHING_FINE;
 }
 
-ErrorCode _writeCommand(FILE* outFile, String* curLine, Command command, uint commandLength)
+ErrorCode _writeCommand(FILE* outFile, const String* curLine, Command command, int commandLength)
 {
     switch (command)
     {
     case Push_c:
     case Pop_c:
-        double arg = {};
-        if (sscanf(curLine->text + commandLength, "%lg", &arg) == 0)
         {
-            char regType = 0;
-            uint readChars = 0;
-            if (sscanf(curLine->text + commandLength, "r%cx%n", &regType, &readChars) != 2 ||
-                    !isspace(curLine->text[commandLength + readChars]))
-                return ERROR_SYNTAX;
-            
-            fprintf(outFile, "%u %u " STACK_EL_SPECIFIER "\n", (uint)command, (uint)RegisterArg, regType - 'a' + 1);
+            double arg = 0;
+            if (sscanf(curLine->text + commandLength + 1, "%lg", &arg) == 0)
+            {
+                char regType = 0;
+                int argLength = 0;
+
+                if (sscanf(curLine->text + commandLength + 1, "r%c%n", &regType, &argLength) != 1)
+                    return ERROR_SYNTAX;
+
+                String stringAfterArg = 
+                {
+                    .text   = curLine->text   + commandLength + argLength + 2,
+                    .length = curLine->length - commandLength - argLength - 2,
+                };
+
+                if (!StringIsEmptyChars(&stringAfterArg))
+                    return ERROR_SYNTAX;
+                
+                fprintf(outFile, "%u %u %u\n", (uint)command, (uint)RegisterArg, regType - 'a' + 1);
+            }
+            else
+            {
+                fprintf(outFile, "%u %u " STACK_EL_SPECIFIER "\n", (uint)command, (uint)ImmediateNumberArg, (StackElement_t)arg);
+            }
+            break;
         }
-        break;
     
     default:
+        fprintf(outFile, "%u\n", (uint)command);
         break;
     }
+
+    return EVERYTHING_FINE;
 }
 
 CommandResult _translateRawCommand(uint rawCommand)
@@ -127,7 +161,6 @@ CommandResult _translateRawCommand(uint rawCommand)
     case out_sn:
         command = Out_c;
         break;
-
 
     case add_sn:
         command = Add_c;

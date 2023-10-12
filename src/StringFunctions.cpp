@@ -1,6 +1,7 @@
 #include <ctype.h>
 #include "StringFunctions.hpp"
 #include "Utils.hpp"
+#include "MinMax.hpp"
 
 const int INCLUDE_NULL_TERMINATOR_FIX = 1, FOUND_STRING = -1, ALPHABET_LENGTH = 256;
 
@@ -286,4 +287,12 @@ void StringPrint(FILE* file, const char* string, char terminator)
     while (*string != terminator && *string != 0)
         putc(*string++, file);
     putc('\n', file);
+}
+
+int StringIsEmptyChars(const String* string)
+{
+    for (size_t i = 0; i < string->length; i++)
+        if (!isspace(string->text[i]))
+            return 0;
+    return 1;
 }

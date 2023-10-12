@@ -1,0 +1,23 @@
+in  ; a 
+in  ; b
+in  ; c
+
+pop rcx
+pop rbx
+pop rax
+
+push rbx
+push rbx
+mul
+
+push 4
+push rax
+push rcx
+mul
+mul
+
+sub
+
+out
+
+hlt

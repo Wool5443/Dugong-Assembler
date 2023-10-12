@@ -6,6 +6,7 @@
 #include "OneginFunctions.hpp"
 #include "Utils.hpp"
 #include "StringFunctions.hpp"
+#include "Sort.hpp"
 
 size_t getFileSize(const char* path);
 
@@ -25,14 +26,15 @@ Text CreateText(const char* path, char terminator)
 
     text.size = getFileSize(path);
     
-    char* rawText = (char*)calloc(text.size + 1, sizeof(char));
+    char* rawText = (char*)calloc(text.size + 2, sizeof(char));
+
+    rawText[text.size] = '\n';
+    rawText[text.size + 1] = '\0';
 
     FILE* file = fopen(path, "rb");
     MyAssertHard(file, ERROR_BAD_FILE, );
     MyAssertHard(text.size == fread(rawText, sizeof(char), text.size, file), ERROR_BAD_FILE, );
     fclose(file); 
-
-    rawText[text.size] = '\0';
 
     text.rawText = rawText;
 

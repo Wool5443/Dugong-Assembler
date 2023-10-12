@@ -47,8 +47,8 @@ struct StackElementOption
 */
 #define StackInit()                                                                      \
 ({                                                                                       \
-    Owner _owner = {__FILE__, __LINE__, __func__};                                       \
-    _stackInit(_owner);                                                                  \
+    SourceCodePosition _owner = {__FILE__, __LINE__, __func__};                          \
+    _stackInit(&_owner);                                                                 \
 })
 
 /**
@@ -59,12 +59,12 @@ do                                                                              
 {                                                                                        \
     if (stack)                                                                           \
     {                                                                                    \
-        Owner _caller = {__FILE__, __LINE__, __func__};                                  \                  
-        _stackDump(where, stack, &_caller, CheckStackIntegrity(stack));          \
+        SourceCodePosition _caller = {__FILE__, __LINE__, __func__};                     \                  
+        _stackDump(where, stack, &_caller, CheckStackIntegrity(stack));                  \
     }                                                                                    \
 } while (0);                        
 
-StackOption _stackInit(Owner owner);
+StackOption _stackInit(SourceCodePosition* owner);
 
 /**
  * @brief Destructor of a stack.
@@ -84,7 +84,7 @@ ErrorCode StackDestructor(Stack* stack);
 */
 ErrorCode CheckStackIntegrity(Stack* stack);
 
-ErrorCode _stackDump(FILE* where, Stack* stack, Owner* caller, ErrorCode error);
+ErrorCode _stackDump(FILE* where, Stack* stack, SourceCodePosition* caller, ErrorCode error);
 
 /**
  * @brief Adds an element on top of stack.

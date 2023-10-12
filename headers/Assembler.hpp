@@ -2,4 +2,4 @@
 
 typedef unsigned int uint;
 
-ErrorCode Compile(const char* codeFilePath);
+ErrorCode Compile(const char* codeFilePath, const char* byteCodeOutPath);

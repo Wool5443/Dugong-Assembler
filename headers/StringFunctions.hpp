@@ -162,4 +162,13 @@ char* StringFilter(char* string, const char* filter, char terminator);
 */
 void StringPrint(FILE* file, const char* string, char terminator);
 
+/**
+ * @brief Checks if the input string consists entirely of empty space chars.
+ * 
+ * @param [in] string - the string to check.
+ * 
+ * @return 1 if true, 0 if false.
+*/
+int StringIsEmptyChars(const String* string);
+
 #endif

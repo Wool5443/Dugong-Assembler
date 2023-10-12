@@ -31,7 +31,6 @@ struct Text
  * @brief Creates a Text member and reads its contents from file.
  * 
  * @param [in] path - the path to a file.
- * @param [in] terminator - what lines end with.
  * 
  * @return Text.
 */
