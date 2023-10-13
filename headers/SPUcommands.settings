@@ -21,3 +21,28 @@ enum Register
     rcx,
     rdx,
 };
+
+static const char* COMMAND_NAMES[] = 
+{
+    "hlt",
+    "push",
+    "pop",
+    "in",
+    "out",
+    "add",
+    "sub",
+    "mul",
+    "div",
+    "sqrt",
+    "sin",
+    "cos",
+};
+
+static const char* REGISTERS_NAMES[] = 
+{
+    "zero reg",
+    "rax",
+    "rbx",
+    "rcx",
+    "rdx",
+};

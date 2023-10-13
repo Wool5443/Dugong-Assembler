@@ -5,7 +5,7 @@
 #include "Stack.hpp"
 #include "SPUcommands.settings"
 
-enum STRING_AS_NUM_snOMMANDS
+enum STRING_AS_NUM_COMMANDS
 {
     push_sn = 1752397168,
     pop_sn  = 7368560,
@@ -34,58 +34,36 @@ struct CommandResult
     ErrorCode error;
 };
 
-CommandResult _translateRawCommand(uint rawCommand);
+static const uint64_t BITS_FOR_COMMAND = 4;
 
-ErrorCode _writeCommand(FILE* outFile, const String* curLine, Command command, int commandLength);
+CommandResult _translateRawCommand(uint64_t rawCommand);
 
-ErrorCode Compile(const char* codeFilePath, const char* byteCodeOutPath)
+ErrorCode _writeCommand(FILE* outFile, const String* curLine, CompilationMode compilationMode);
+
+uint64_t _translateArgCommandToBinFormat(Command command, ArgType argType);
+
+ErrorCode Compile(const char* codeFilePath, const char* byteCodeOutPath, CompilationMode compilationMode)
 {
     MyAssertSoft(codeFilePath, ERROR_NULLPTR);
 
-    FILE* outFile = fopen(byteCodeOutPath, "w");
+    FILE* outFile = {};
+
+    if (compilationMode == DRAFT_COMPILATION)
+        outFile = fopen(byteCodeOutPath, "w");
+    else if (compilationMode == BINARY_COMPILATION)
+        outFile = fopen(byteCodeOutPath, "wb");
 
     MyAssertSoft(outFile, ERROR_BAD_FILE);
 
     Text code = CreateText(codeFilePath, '\n');
 
+    uint64_t* codeArray = (uint64_t*)calloc(code.numberOfLines, sizeof(*codeArray));
+
     for (size_t position = 0; position < code.numberOfLines; position++)
     {
-        const String* curLine = &(code.lines[position]);
-
-        char* endLinePtr = (char*)strchr(curLine->text, '\n');
-        if (endLinePtr)
-            *endLinePtr = 0;
-
-        char* commentPtr = (char*)strchr(curLine->text, ';');
-        if (commentPtr)
-            *commentPtr = 0;
-
-        if (StringIsEmptyChars(curLine))
-            continue;
-
-        uint rawCommand = 0;
-
-        int commandLength = 0;
-
-        if (sscanf(curLine->text, "%4s%n", (char*)&rawCommand, &commandLength) != 1)
-        {
-            DestroyText(&code);
-            return ERROR_SYNTAX;
-        }
-
-
-
-        CommandResult resCom = _translateRawCommand(rawCommand);
-
-        if (resCom.error)
-        {
-            DestroyText(&code);
-            return resCom.error;
-        }
-
-        Command command = resCom.command;
-
-        ErrorCode writeError = _writeCommand(outFile, curLine, command, commandLength);
+        const String* curLine = &code.lines[position];
+    
+        ErrorCode writeError = _writeCommand(outFile, curLine, compilationMode);
         
         if (writeError)
         {
@@ -100,43 +78,112 @@ ErrorCode Compile(const char* codeFilePath, const char* byteCodeOutPath)
     return EVERYTHING_FINE;
 }
 
-ErrorCode _writeCommand(FILE* outFile, const String* curLine, Command command, int commandLength)
+ErrorCode _writeCommand(FILE* outFile, const String* curLine, CompilationMode compilationMode)
 {
+    char* endLinePtr = (char*)strchr(curLine->text, '\n');
+    if (endLinePtr)
+        *endLinePtr = 0;
+
+    char* commentPtr = (char*)strchr(curLine->text, ';');
+    if (commentPtr)
+        *commentPtr = 0;
+
+    if (StringIsEmptyChars(curLine))
+        return EVERYTHING_FINE;
+
+    uint64_t rawCommand = 0;
+
+    int commandLength = 0;
+
+    if (sscanf(curLine->text, "%4s%n", (char*)&rawCommand, &commandLength) != 1)
+        return ERROR_SYNTAX;
+
+    CommandResult resCommand = _translateRawCommand(rawCommand);
+
+    if (resCommand.error)
+        return resCommand.error;
+
+    Command command = resCommand.command;
+
     switch (command)
     {
     case Push_c:
     case Pop_c:
+    {
+        double arg = 0;
+
+        if (sscanf(curLine->text + commandLength + 1, "%lg", &arg) == 0)
         {
-            double arg = 0;
-            if (sscanf(curLine->text + commandLength + 1, "%lg", &arg) == 0)
+            char regType = 0;
+            int argLength = 0;
+
+            if (sscanf(curLine->text + commandLength + 1, "r%c%n", &regType, &argLength) != 1)
+                return ERROR_SYNTAX;
+
+            if (!StringIsEmptyChars(curLine->text + commandLength + argLength + 2, '\0'))
+                return ERROR_SYNTAX;
+
+            uint64_t regNumber = regType - 'a' + 1;
+            
+            if (compilationMode == DRAFT_COMPILATION)
+                fprintf(outFile, "%u %u %u%30s %s\n", (uint64_t)command,
+                                                      (uint64_t)RegisterArg, regNumber, COMMAND_NAMES[command],
+                                                      REGISTERS_NAMES[regNumber]);
+            else if (compilationMode == BINARY_COMPILATION)
             {
-                char regType = 0;
-                int argLength = 0;
+                uint64_t commandWithArg = _translateArgCommandToBinFormat(command, RegisterArg);
+                fwrite(&commandWithArg, sizeof(commandWithArg), 1, outFile);
+                fwrite(&regNumber, sizeof(regNumber), 1, outFile);
 
-                if (sscanf(curLine->text + commandLength + 1, "r%c%n", &regType, &argLength) != 1)
-                    return ERROR_SYNTAX;
-
-                if (!StringIsEmptyChars(curLine->text + commandLength + argLength + 2, 0))
-                    return ERROR_SYNTAX;
-                
-                fprintf(outFile, "%u %u %u\n", (uint)command, (uint)RegisterArg, regType - 'a' + 1);
+                fprintf(stderr, "Command: %llu\n", commandWithArg);
+                fprintf(stderr, "Arg: %llu\n", regNumber);
             }
             else
-            {
-                fprintf(outFile, "%u %u " STACK_EL_SPECIFIER "\n", (uint)command, (uint)ImmediateNumberArg, (StackElement_t)arg);
-            }
-            break;
+                return ERROR_SYNTAX;
         }
+        else
+        {
+            if (compilationMode == DRAFT_COMPILATION)
+                fprintf(outFile, "%llu %llu %lg%30s %lg\n", (uint64_t)command, (uint64_t)ImmediateNumberArg, arg, COMMAND_NAMES[command], arg);
+            else if (compilationMode == BINARY_COMPILATION)
+            {
+                uint64_t commandWithArg = _translateArgCommandToBinFormat(command, ImmediateNumberArg);
+                fwrite(&commandWithArg, sizeof(commandWithArg), 1, outFile);
+                fwrite(&arg, sizeof(arg), 1, outFile);
+
+                fprintf(stderr, "Command: %llu\n", commandWithArg);
+                fprintf(stderr, "Arg: %lg\n", arg);
+            }
+            else
+                return ERROR_SYNTAX;
+        }
+        break;
+    }
     
     default:
-        fprintf(outFile, "%u\n", (uint)command);
+        if (compilationMode == DRAFT_COMPILATION)
+            fprintf(outFile, "%llu%30s\n", (uint64_t)command, COMMAND_NAMES[command]);
+        else if (compilationMode == BINARY_COMPILATION)
+        {
+            uint64_t goodSizeCommand = (uint64_t)command;
+            fwrite(&goodSizeCommand, sizeof(goodSizeCommand), 1, outFile);
+
+            fprintf(stderr, "No arg command: %llu\n", goodSizeCommand);
+        }
+        else
+            return ERROR_SYNTAX;
         break;
     }
 
     return EVERYTHING_FINE;
 }
 
-CommandResult _translateRawCommand(uint rawCommand)
+uint64_t _translateArgCommandToBinFormat(Command command, ArgType argType)
+{
+    return ((uint64_t)command | (argType << BITS_FOR_COMMAND));
+}
+
+CommandResult _translateRawCommand(uint64_t rawCommand)
 {
     Command command = {};
 
