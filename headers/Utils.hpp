@@ -49,7 +49,7 @@ do                                                                              
    __typeof__(error) _error = error;                                                            \
    if (_error)                                                                                  \
       return _error;                                                                            \
-} while (0);
+} while (0)
 
 /**
  * @brief Hard assert which tells the file, function and line where the error occurred.

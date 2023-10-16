@@ -3,82 +3,91 @@
 #include "Assembler.hpp"
 #include "OneginFunctions.hpp"
 #include "Stack.hpp"
-#include "SPUcommands.settings"
-
-enum STRING_AS_NUM_COMMANDS
-{
-    push_sn = 1752397168,
-    pop_sn  = 7368560,
-    in_sn   = 28265,
-    out_sn  = 7632239,
-    hlt_sn  = 7629928,
-    add_sn  = 6579297,
-    sub_sn  = 6452595,
-    mul_sn  = 7107949,
-    div_sn  = 7760228,
-    sqrt_sn = 1953657203,
-    sin_sn  = 7235955,
-    cos_sn  = 7565155,
-};
+#include "SPUsettings.ini"
 
 enum ArgType
 {
     ImmediateNumberArg = 1,
     RegisterArg = 2,
-    ImmediateAndRegisterArg = 3,
 };
 
-struct CommandResult
+enum Command
 {
-    Command command;
+    #define DEF_COMMAND(name, num, ...) \
+        CMD_ ## name = num,
+
+    #include "Commands.h"
+
+    #undef DEF_COMMAND
+};
+
+struct ArgResult
+{
+    union DoubleStackEl
+    {
+        double immed;
+        uint64_t regNum;
+    } value;
+    ArgType argType;
     ErrorCode error;
 };
 
-static const uint64_t BITS_FOR_COMMAND = 4;
+struct Label
+{
+    size_t codePosition;
+    const char* label;
+};
 
-CommandResult _translateRawCommand(uint64_t rawCommand);
+static ErrorCode _proccessLine(StackElement_t* codeArray, size_t* codePosition, const String* curLine, FILE* listingFile);
 
-ErrorCode _writeCommand(FILE* outFile, const String* curLine, CompilationMode compilationMode);
+static ArgResult _getArg(const String* curLine, int commandLength);
 
-uint64_t _translateArgCommandToBinFormat(Command command, ArgType argType);
+uint64_t _translateCommandToBinFormat(Command command, ArgType argType);
 
-ErrorCode Compile(const char* codeFilePath, const char* byteCodeOutPath, CompilationMode compilationMode)
+ErrorCode Compile(const char* codeFilePath, const char* byteCodeFilePath, const char* listingFilePath)
 {
     MyAssertSoft(codeFilePath, ERROR_NULLPTR);
 
-    FILE* outFile = {};
+    FILE* byteCodeFile = fopen(byteCodeFilePath, "wb");
+    MyAssertSoft(byteCodeFile, ERROR_BAD_FILE);
 
-    if (compilationMode == DRAFT_COMPILATION)
-        outFile = fopen(byteCodeOutPath, "w");
-    else if (compilationMode == BINARY_COMPILATION)
-        outFile = fopen(byteCodeOutPath, "wb");
-
-    MyAssertSoft(outFile, ERROR_BAD_FILE);
+    FILE* listingFile = fopen(listingFilePath, "w");
+    MyAssertSoft(listingFile, ERROR_BAD_FILE);
 
     Text code = CreateText(codeFilePath, '\n');
 
-    uint64_t* codeArray = (uint64_t*)calloc(code.numberOfLines, sizeof(*codeArray));
+    double* codeArray = (double*)calloc(code.numberOfLines * 2, sizeof(*codeArray));
 
-    for (size_t position = 0; position < code.numberOfLines; position++)
+    Label labelArray[MAX_LABELS] = {};
+
+    fprintf(listingFile, "codePosition:   binary: %16scommand:%8sarg:\n", "", "");
+
+    size_t codePosition = 0;
+    for (size_t lineIndex = 0; lineIndex < code.numberOfLines; lineIndex++)
     {
-        const String* curLine = &code.lines[position];
+        const String* curLine = &code.lines[lineIndex];
     
-        ErrorCode writeError = _writeCommand(outFile, curLine, compilationMode);
+        ErrorCode proccessError = _proccessLine(codeArray, &codePosition, curLine, listingFile);
         
-        if (writeError)
+        if (proccessError)
         {
             DestroyText(&code);
-            return writeError;
+            return proccessError;
         }
     }
 
-    fclose(outFile);
+    fwrite(codeArray, codePosition, sizeof(*codeArray), byteCodeFile);
+
+    fclose(byteCodeFile);
+    fclose(listingFile);
     DestroyText(&code);
+    free(codeArray);
 
     return EVERYTHING_FINE;
 }
 
-ErrorCode _writeCommand(FILE* outFile, const String* curLine, CompilationMode compilationMode)
+// AUTO GENERATED!!!!!! CHANGE Commands.gen IF NEEDED!!!!!
+static ErrorCode _proccessLine(StackElement_t* codeArray, size_t* codePosition, const String* curLine, FILE* listingFile)
 {
     char* endLinePtr = (char*)strchr(curLine->text, '\n');
     if (endLinePtr)
@@ -91,156 +100,87 @@ ErrorCode _writeCommand(FILE* outFile, const String* curLine, CompilationMode co
     if (StringIsEmptyChars(curLine))
         return EVERYTHING_FINE;
 
-    uint64_t rawCommand = 0;
-
+    char command[10] = "";
     int commandLength = 0;
 
-    if (sscanf(curLine->text, "%4s%n", (char*)&rawCommand, &commandLength) != 1)
+    if (sscanf(curLine->text, "%4s%n", command, &commandLength) != 1)
         return ERROR_SYNTAX;
 
-    CommandResult resCommand = _translateRawCommand(rawCommand);
+    #define DEF_COMMAND(name, num, hasArg, ...)                                               \
+    if (strcasecmp(command, #name) == 0)                                                      \
+    {                                                                                         \
+        fprintf(listingFile, "            [0x%zX]\t", *codePosition);                         \
+        if (hasArg)                                                                           \
+        {                                                                                     \
+            ArgResult arg = _getArg(curLine, commandLength);                                  \
+            RETURN_ERROR(arg.error);                                                          \
+                                                                                              \
+            uint64_t cmdBin = _translateCommandToBinFormat(CMD_ ## name, arg.argType);        \
+            *((uint64_t*)codeArray + (*codePosition)++) = cmdBin;                             \
+                                                                                              \
+            switch (arg.argType)                                                              \
+            {                                                                                 \
+                case ImmediateNumberArg:                                                      \
+                    codeArray[(*codePosition)++] = arg.value.immed;                           \
+                    fprintf(listingFile, "0x%-4lX0x%-20lX%-8s    %lg", cmdBin,                \
+                                                              *(uint64_t*)&arg.value.immed,   \
+                                                              command, arg.value.immed);      \
+                    break;                                                                    \
+                case RegisterArg:                                                             \
+                    *((uint64_t*)codeArray + (*codePosition)++) = arg.value.regNum;           \
+                    fprintf(listingFile, "0x%-4lX0x%-20lX%-8s    %llu", cmdBin,               \
+                                                                        arg.value.regNum,     \
+                                                                        command,              \
+                                                                        arg.value.regNum);    \
+                    break;                                                                    \
+                default:                                                                      \
+                    return ERROR_SYNTAX;                                                      \
+            }                                                                                 \
+        }                                                                                     \
+        else                                                                                  \
+        {                                                                                     \
+            *((uint64_t*)codeArray + (*codePosition)++) = num;                                \
+            fprintf(listingFile, "0x%-4X%22s%s", num, "", command);                          \
+        }                                                                                     \
+        putc('\n', listingFile);                                                              \
+    }                                                                                         \
+    else 
 
-    if (resCommand.error)
-        return resCommand.error;
+    #include "Commands.gen"
 
-    Command command = resCommand.command;
+    /*else*/ return ERROR_SYNTAX;
 
-    switch (command)
-    {
-    case Push_c:
-    case Pop_c:
-    {
-        double arg = 0;
-
-        if (sscanf(curLine->text + commandLength + 1, "%lg", &arg) == 0)
-        {
-            char regType = 0;
-            int argLength = 0;
-
-            if (sscanf(curLine->text + commandLength + 1, "r%c%n", &regType, &argLength) != 1)
-                return ERROR_SYNTAX;
-
-            if (!StringIsEmptyChars(curLine->text + commandLength + argLength + 2, '\0'))
-                return ERROR_SYNTAX;
-
-            uint64_t regNumber = regType - 'a' + 1;
-            
-            if (compilationMode == DRAFT_COMPILATION)
-                fprintf(outFile, "%u %u %u%30s %s\n", (uint64_t)command,
-                                                      (uint64_t)RegisterArg, regNumber, COMMAND_NAMES[command],
-                                                      REGISTERS_NAMES[regNumber]);
-            else if (compilationMode == BINARY_COMPILATION)
-            {
-                uint64_t commandWithArg = _translateArgCommandToBinFormat(command, RegisterArg);
-                fwrite(&commandWithArg, sizeof(commandWithArg), 1, outFile);
-                fwrite(&regNumber, sizeof(regNumber), 1, outFile);
-
-                fprintf(stderr, "Command: %llu\n", commandWithArg);
-                fprintf(stderr, "Arg: %llu\n", regNumber);
-            }
-            else
-                return ERROR_SYNTAX;
-        }
-        else
-        {
-            if (compilationMode == DRAFT_COMPILATION)
-                fprintf(outFile, "%llu %llu %lg%30s %lg\n", (uint64_t)command, (uint64_t)ImmediateNumberArg, arg, COMMAND_NAMES[command], arg);
-            else if (compilationMode == BINARY_COMPILATION)
-            {
-                uint64_t commandWithArg = _translateArgCommandToBinFormat(command, ImmediateNumberArg);
-                fwrite(&commandWithArg, sizeof(commandWithArg), 1, outFile);
-                fwrite(&arg, sizeof(arg), 1, outFile);
-
-                fprintf(stderr, "Command: %llu\n", commandWithArg);
-                fprintf(stderr, "Arg: %lg\n", arg);
-            }
-            else
-                return ERROR_SYNTAX;
-        }
-        break;
-    }
-    
-    default:
-        if (compilationMode == DRAFT_COMPILATION)
-            fprintf(outFile, "%llu%30s\n", (uint64_t)command, COMMAND_NAMES[command]);
-        else if (compilationMode == BINARY_COMPILATION)
-        {
-            uint64_t goodSizeCommand = (uint64_t)command;
-            fwrite(&goodSizeCommand, sizeof(goodSizeCommand), 1, outFile);
-
-            fprintf(stderr, "No arg command: %llu\n", goodSizeCommand);
-        }
-        else
-            return ERROR_SYNTAX;
-        break;
-    }
+    #undef DEF_COMMAND
 
     return EVERYTHING_FINE;
 }
 
-uint64_t _translateArgCommandToBinFormat(Command command, ArgType argType)
+static ArgResult _getArg(const String* curLine, int commandLength)
 {
-    return ((uint64_t)command | (argType << BITS_FOR_COMMAND));
-}
+    ArgResult reg = {};
 
-CommandResult _translateRawCommand(uint64_t rawCommand)
-{
-    Command command = {};
-
-    switch (rawCommand)
+    if (sscanf(curLine->text + commandLength + 1, "%lg", &reg.value.immed) == 1)
     {
-    case push_sn:
-        command = Push_c;
-        break;
-
-    case pop_sn:
-        command = Pop_c;
-        break;
-        
-    case in_sn:
-        command = In_c;
-        break;
-
-    case out_sn:
-        command = Out_c;
-        break;
-
-    case add_sn:
-        command = Add_c;
-        break;
-
-    case sub_sn:
-        command = Subtract_c;
-        break;
-
-    case mul_sn:
-        command = Multiply_c;
-        break;
-
-    case div_sn:
-        command = Divide_c;
-        break;
-
-    case sqrt_sn:
-        command = Sqrt_c;
-        break;
-
-    case sin_sn:
-        command = Sin_c;
-        break;
-
-    case cos_sn:
-        command = Cos_c;
-        break;
-
-    case hlt_sn:
-        command = Halt_c;
-        break;
-
-    default:
-        return {Halt_c, ERROR_SYNTAX};
-        break;
+        reg.argType = ImmediateNumberArg;
+        reg.error = EVERYTHING_FINE;
+        return reg;
     }
 
-    return {command, EVERYTHING_FINE};
+    char regType = 0;
+    if (sscanf(curLine->text + commandLength + 1, "r%cx", &regType) != 1)
+    {
+        reg.error = ERROR_SYNTAX;
+        return reg;
+    }
+
+    reg.argType = RegisterArg;
+    reg.value.regNum = regType - 'a' + 1;
+    reg.error = EVERYTHING_FINE;
+
+    return reg;
+}
+
+uint64_t _translateCommandToBinFormat(Command command, ArgType argType)
+{
+    return ((uint64_t)command | (argType << BITS_FOR_COMMAND));
 }

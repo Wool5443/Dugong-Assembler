@@ -1,0 +1,17 @@
+//DEF_COMMAND(name, num, hasArg, code)
+
+#define PUSH(val) Push(spu->stack, val)
+#define POP       Pop(spu->stack)
+
+DEF_COMMAND(PUSH, 1, true)
+DEF_COMMAND(POP,  2, true)
+DEF_COMMAND(IN,   3, false)
+DEF_COMMAND(OUT,  4, false)
+DEF_COMMAND(ADD,  5, false)
+DEF_COMMAND(SUB,  6, false)
+DEF_COMMAND(MUL,  7, false)
+DEF_COMMAND(DIV,  8, false)
+DEF_COMMAND(SQRT, 9, false)
+DEF_COMMAND(SIN,  10, false)
+DEF_COMMAND(COS,  11, false)
+DEF_COMMAND(HLT,  0,  false)

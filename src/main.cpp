@@ -12,26 +12,17 @@ int main(int argc, const char* argv[])
     //     return ERROR_BAD_FILE;
     // }
 
-    const char* outFile = "byteCode.bin";
+    const char* codeFilePath = "ggg.dug";
+    const char* byteCodeFilePath = "byteCode.bin";
+    const char* listingFilePath = "listing.txt";
 
-    if (argc == 3)
-        outFile = argv[2];
-    
-    ErrorCode binaryCompileError = Compile("ggg.dug", outFile, BINARY_COMPILATION);
-    // ErrorCode binaryCompileError = Compile(argv[1], outFile, BINARY_COMPILATION);
+    ErrorCode compileError = Compile(codeFilePath, byteCodeFilePath, listingFilePath);
 
-    if (binaryCompileError)
+    if (compileError)
     {
-        fprintf(stderr, "BINARY COMPILE ERROR!!! %s\n", ERROR_CODE_NAMES[binaryCompileError]);
-        return binaryCompileError;
+        printf("COMPILE ERROR %s!!!\n", ERROR_CODE_NAMES[compileError]);
+        return compileError;
     }
 
-    ErrorCode draftCompileError = Compile("ggg.dug", "draftCompilation.draft", DRAFT_COMPILATION);
-    // ErrorCode draftCompileError = Compile(argv[1], "draftCompilation.draft", DRAFT_COMPILATION);
-
-    if (draftCompileError)
-    {
-        fprintf(stderr, "DRAFT COMPILE ERROR!!! %s\n", ERROR_CODE_NAMES[draftCompileError]);
-        return draftCompileError;
-    }
+    return EVERYTHING_FINE;
 }
