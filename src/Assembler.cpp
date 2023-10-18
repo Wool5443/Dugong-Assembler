@@ -80,7 +80,7 @@ ErrorCode Compile(const char* codeFilePath, const char* byteCodeFilePath, const 
     Label  labelArray[MAX_LABELS] = {};
     size_t freeLabelCell = 0;
 
-    fprintf(listingFile, "codePosition:   binary: %16scommand:%8sarg:\n", "", "");
+    fprintf(listingFile, "codePosition:\t\tbinary:\t%17scommand:%8sarg:\n", "", "");
 
     size_t codePosition = 0;
     for (size_t lineIndex = 0; lineIndex < code.numberOfLines; lineIndex++)
@@ -163,7 +163,7 @@ static ErrorCode _proccessLine(StackElement_t* codeArray, size_t* codePosition,
     #define DEF_COMMAND(name, num, hasArg, ...)                                               \
     if (strcasecmp(command, #name) == 0)                                                      \
     {                                                                                         \
-        ON_SECOND_RUN(fprintf(listingFile, "            [0x%zX]\t", *codePosition));          \
+        ON_SECOND_RUN(fprintf(listingFile, "\t\t\t[0x%zX]\t\t", *codePosition));                \
         if (hasArg)                                                                           \
         {                                                                                     \
             ArgResult arg = _getArg(curLine, commandLength, labelArray);                      \
@@ -176,20 +176,20 @@ static ErrorCode _proccessLine(StackElement_t* codeArray, size_t* codePosition,
             {                                                                                 \
                 case ImmediateNumberArg:                                                      \
                     codeArray[(*codePosition)++] = arg.value.immed;                           \
-                    ON_SECOND_RUN(fprintf(listingFile, "0x%-4lX0x%-20lX%-8s    %lg", cmdBin,  \
+                    ON_SECOND_RUN(fprintf(listingFile, "0x%-4lX0x%-20lX%-10s    %lg", cmdBin,  \
                                                         *(uint64_t*)&arg.value.immed,         \
                                                         command, arg.value.immed));           \
                     break;                                                                    \
                 case RegisterArg:                                                             \
                     *((uint64_t*)codeArray + (*codePosition)++) = arg.value.regNum;           \
-                    ON_SECOND_RUN(fprintf(listingFile, "0x%-4lX0x%-20lX%-8s    %lu", cmdBin,  \
+                    ON_SECOND_RUN(fprintf(listingFile, "0x%-4lX0x%-20lX%-10s    %lu", cmdBin,  \
                                                         arg.value.regNum,                     \
                                                         command,                              \
                                                         arg.value.regNum));                   \
                     break;                                                                    \
                 case LabelArg:                                                             \
                     *((uint64_t*)codeArray + (*codePosition)++) = arg.value.codePosition;     \
-                    ON_SECOND_RUN(fprintf(listingFile, "0x%-4lX0x%-20lX%-8s    %lu", cmdBin,  \
+                    ON_SECOND_RUN(fprintf(listingFile, "0x%-4lX0x%-20lX%-10s    %lu", cmdBin,  \
                                                         arg.value.codePosition,               \
                                                         command,                              \
                                                         arg.value.codePosition));             \
