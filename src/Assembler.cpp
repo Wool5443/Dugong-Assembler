@@ -244,8 +244,11 @@ static ErrorCode _insertLabel(Label labelArray[], size_t* freeLabelCell, const S
 
 static size_t _getLabelCodePosition(const Label labelArray[], const char* label)
 {
+    if (!labelArray || !label)
+        return LABEL_NOT_FOUND;
+        
     for (size_t i = 0; i < MAX_LABELS; i++)
-        if (strncmp(labelArray[i].label, label, MAX_LABEL_SIZE) == 0)
+        if (labelArray[i].label && strncmp(labelArray[i].label, label, MAX_LABEL_SIZE) == 0)
             return labelArray[i].codePosition;
     return LABEL_NOT_FOUND;
 }
