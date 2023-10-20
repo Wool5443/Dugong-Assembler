@@ -2,16 +2,20 @@
 #include <ctype.h>
 #include "Assembler.hpp"
 #include "OneginFunctions.hpp"
-#include "Stack.hpp"
 #include "SPUsettings.ini"
 
 #define ON_SECOND_RUN(...) if (isSecondRun) __VA_ARGS__
+
+const size_t LABEL_NOT_FOUND = (size_t)-1;
+
+const size_t MAX_ARGS_SIZE = sizeof(double) + 1;
+const size_t REG_NUM_BYTE  = MAX_ARGS_SIZE - 1;
 
 enum ArgType
 {
     ImmediateNumberArg = 1,
     RegisterArg        = 2,
-    LabelArg           = 3,
+    RAMArg             = 4,
 };
 
 enum Command
@@ -26,13 +30,9 @@ enum Command
 
 struct ArgResult
 {
-    union DoubleStackEl
-    {
-        double   immed;
-        uint64_t regNum;
-        size_t   codePosition;
-    } value;
-    ArgType argType;
+    double immed;
+    char regNum;
+    char argType;
     ErrorCode error;
 };
 
@@ -44,24 +44,23 @@ struct CodePositionResult
 
 struct Label
 {
-    size_t codePosition;
     const char* label;
+    size_t codePosition;
 };
 
-const size_t LABEL_NOT_FOUND = (size_t)-1;
-
-static ErrorCode _proccessLine(StackElement_t* codeArray, size_t* codePosition,
-                               Label labelArray[], size_t* freeLabelCell, String* curLine, FILE* listingFile,
+static ErrorCode _proccessLine(char* codeArray, size_t* codePosition,
+                               Label labelArray[], size_t* freeLabelCell,
+                               String* curLine, FILE* listingFile,
                                bool isSecondRun);
 
 static ErrorCode _insertLabel(Label* labelArray, size_t* freeLabelCell, const String* curLine, const char* labelEnd,
                               size_t codePosition);
 
-static ArgResult _getArg(const String* curLine, int commandLength, const Label labelArray[]);
+static ArgResult _getArg(const char* argStr, const Label labelArray[]);
 
 static CodePositionResult _getLabelCodePosition(const Label labelArray[], const char* label);
 
-static uint64_t _translateCommandToBinFormat(Command command, ArgType argType);
+static char _translateCommandToBinFormat(Command command, char argType);
 
 ErrorCode Compile(const char* codeFilePath, const char* byteCodeFilePath, const char* listingFilePath)
 {
@@ -75,12 +74,12 @@ ErrorCode Compile(const char* codeFilePath, const char* byteCodeFilePath, const 
 
     Text code = CreateText(codeFilePath, '\n');
 
-    double* codeArray = (double*)calloc(code.numberOfLines * 2, sizeof(*codeArray));
+    char* codeArray = (char*)calloc(code.numberOfLines * 2, sizeof(double));
 
     Label  labelArray[MAX_LABELS] = {};
     size_t freeLabelCell = 0;
 
-    fprintf(listingFile, "codePosition:\t\t\tbinary:\t%17scommand:%8sarg:\n", "", "");
+    fprintf(listingFile, "Code position:%20s cmd:%4s arg:%24s original:\n", "", "", "");
 
     size_t codePosition = 0;
     for (size_t lineIndex = 0; lineIndex < code.numberOfLines; lineIndex++)
@@ -92,7 +91,10 @@ ErrorCode Compile(const char* codeFilePath, const char* byteCodeFilePath, const 
 
         if (proccessError)
         {
+            fclose(byteCodeFile);
+            fclose(listingFile);
             DestroyText(&code);
+            free(codeArray);
             return proccessError;
         }
     }
@@ -107,7 +109,10 @@ ErrorCode Compile(const char* codeFilePath, const char* byteCodeFilePath, const 
 
         if (proccessError)
         {
+            fclose(byteCodeFile);
+            fclose(listingFile);
             DestroyText(&code);
+            free(codeArray);
             return proccessError;
         }
     }
@@ -126,8 +131,9 @@ ErrorCode Compile(const char* codeFilePath, const char* byteCodeFilePath, const 
 }
 
 // AUTO GENERATED!!!!!! CHANGE Commands.gen IF NEEDED!!!!!
-static ErrorCode _proccessLine(StackElement_t* codeArray, size_t* codePosition,
-                               Label labelArray[], size_t* freeLabelCell, String* curLine, FILE* listingFile,
+static ErrorCode _proccessLine(char* codeArray, size_t* codePosition,
+                               Label labelArray[], size_t* freeLabelCell,
+                               String* curLine, FILE* listingFile,
                                bool isSecondRun)
 {
     char* endLinePtr = (char*)strchr(curLine->text, '\n');
@@ -141,7 +147,7 @@ static ErrorCode _proccessLine(StackElement_t* codeArray, size_t* codePosition,
     if (StringIsEmptyChars(curLine))
         return EVERYTHING_FINE;
 
-    char command[10] = "";
+    char command[5] = "";
     int commandLength = 0;
 
     const char* labelEnd = strchr(curLine->text, ':');
@@ -163,46 +169,38 @@ static ErrorCode _proccessLine(StackElement_t* codeArray, size_t* codePosition,
     #define DEF_COMMAND(name, num, hasArg, ...)                                               \
     if (strcasecmp(command, #name) == 0)                                                      \
     {                                                                                         \
-        ON_SECOND_RUN(fprintf(listingFile, "%12s[0x%zX]\t\t\t", "", *codePosition));          \
+        ON_SECOND_RUN(fprintf(listingFile, "%13s [0x%016lX] %4s", "",                         \
+                             (uint64_t)*codePosition, ""));                                   \
+                                                                                              \
         if (hasArg)                                                                           \
         {                                                                                     \
-            ArgResult arg = _getArg(curLine, commandLength, labelArray);                      \
+            ArgResult arg = _getArg(curLine->text + commandLength + 1, labelArray);           \
             RETURN_ERROR(arg.error);                                                          \
                                                                                               \
-            uint64_t cmdBin = _translateCommandToBinFormat(CMD_ ## name, arg.argType);        \
-            *((uint64_t*)codeArray + (*codePosition)++) = cmdBin;                             \
+            char cmd = _translateCommandToBinFormat(CMD_ ## name, arg.argType);               \
+            memcpy(codeArray + (*codePosition)++, &cmd, 1);                                   \
                                                                                               \
-            switch (arg.argType)                                                              \
+            if (arg.argType & ImmediateNumberArg)                                             \
             {                                                                                 \
-                case ImmediateNumberArg:                                                      \
-                    codeArray[(*codePosition)++] = arg.value.immed;                           \
-                    ON_SECOND_RUN(fprintf(listingFile, "0x%-4lX0x%-20lX%10s%s", cmdBin,       \
-                                                        *(uint64_t*)&arg.value.immed,         \
-                                                        "", curLine->text));                  \
-                    break;                                                                    \
-                case RegisterArg:                                                             \
-                    *((uint64_t*)codeArray + (*codePosition)++) = arg.value.regNum;           \
-                    ON_SECOND_RUN(fprintf(listingFile, "0x%-4lX0x%-20lX%10s%s", cmdBin,       \
-                                                        arg.value.regNum,                     \
-                                                        "", curLine->text));                  \
-                    break;                                                                    \
-                case LabelArg:                                                                \
-                    *((uint64_t*)codeArray + (*codePosition)++) = arg.value.codePosition;     \
-                    ON_SECOND_RUN(fprintf(listingFile, "0x%-4lX0x%-20lX%10s%s", cmdBin,       \
-                                                        arg.value.codePosition,               \
-                                                        "", curLine->text));                  \
-                    break;                                                                    \
-                default:                                                                      \
-                    return ERROR_SYNTAX;                                                      \
+                memcpy(codeArray + *codePosition, &arg.immed, sizeof(double));                \
+                *codePosition += 8;                                                           \
             }                                                                                 \
+            if (arg.argType & RegisterArg)                                                    \
+            {                                                                                 \
+                memcpy(codeArray + *codePosition, &arg.regNum, 1);                            \
+                *codePosition += 1;                                                           \
+            }                                                                                 \
+                                                                                              \
+            ON_SECOND_RUN(fprintf(listingFile, "0x%02hX %4s", cmd, ""));                      \
+            ON_SECOND_RUN(fprintf(listingFile, "0x%016lX 0x%02hhX %10s",                      \
+                                  *(uint64_t*)&arg.immed, arg.regNum, ""));                   \
         }                                                                                     \
         else                                                                                  \
         {                                                                                     \
-            *((uint64_t*)codeArray + (*codePosition)++) = num;                                \
-            ON_SECOND_RUN(fprintf(listingFile, "%38s%s", "", curLine->text));                 \
+            char cmd = (char)CMD_ ## name;                                                    \
+            memcpy(codeArray + (*codePosition)++, &cmd, 1);                                   \
+            ON_SECOND_RUN(fprintf(listingFile, "0x%02hX %38s", cmd, ""));                     \
         }                                                                                     \
-        ON_SECOND_RUN(if (commentPtr) fprintf(listingFile, "\t;%s", commentPtr + 1));         \
-        ON_SECOND_RUN(putc('\n', listingFile));                                               \
     }                                                                                         \
     else 
 
@@ -215,7 +213,74 @@ static ErrorCode _proccessLine(StackElement_t* codeArray, size_t* codePosition,
     if (commentPtr)
         *commentPtr = ';';
 
+    ON_SECOND_RUN(fprintf(listingFile, "%s\n", curLine->text));
+
     return EVERYTHING_FINE;
+}
+
+static ArgResult _getArg(const char* argStr, const Label labelArray[])
+{
+    if (!argStr || !labelArray)
+        return {LABEL_NOT_FOUND, ERROR_NULLPTR};
+
+    ArgResult result = {};
+
+    const char* bracketPtr = strchr(argStr, '[');
+    if (bracketPtr)
+    {
+        if (!strchr(argStr, ']'))
+        {
+            result.error = ERROR_SYNTAX;
+            return result;
+        }
+        argStr = bracketPtr + 1;
+        result.argType |= RAMArg;
+    }
+
+    int readChars = 0;
+
+    int regType = 0;
+    if (sscanf(argStr, "r%cx%n", &regType, &readChars) == 1)
+    {
+        result.argType |= RegisterArg;
+        result.regNum = regType -'a' + 1;
+        argStr += readChars;
+    }
+
+    const char* plusPtr = strchr(argStr, '+');
+    if (plusPtr)
+        argStr = plusPtr + 1;
+
+    double immed = 0;
+    if (sscanf(argStr, "%lg%n", &immed, &readChars) == 1)
+    {
+        result.argType |= ImmediateNumberArg;
+        result.immed = immed;
+    }
+
+    if (result.argType == 0)
+    {
+        char label[MAX_LABEL_SIZE] = "";
+
+        sscanf(argStr, "%s", label);
+
+        CodePositionResult labelCodePostitionResult = _getLabelCodePosition(labelArray, label);
+
+        if (labelCodePostitionResult.error)
+        {
+            result.error = ERROR_SYNTAX;
+            return result;
+        }
+
+        result.argType = ImmediateNumberArg;
+        *(uint64_t*)&result.immed = labelCodePostitionResult.value;
+        result.error = EVERYTHING_FINE;
+    }
+
+    if (result.argType == 0 || result.argType == RAMArg)
+        result.error = ERROR_SYNTAX;
+
+    return result;
 }
 
 static ErrorCode _insertLabel(Label labelArray[], size_t* freeLabelCell, const String* curLine, const char* labelEnd,
@@ -254,57 +319,7 @@ static CodePositionResult _getLabelCodePosition(const Label labelArray[], const 
     return {LABEL_NOT_FOUND, EVERYTHING_FINE};
 }
 
-static ArgResult _getArg(const String* curLine, int commandLength, const Label labelArray[])
+static char _translateCommandToBinFormat(Command command, char argType)
 {
-    ArgResult reg = {};
-
-    const char* argStrPtr = curLine->text + commandLength + 1;
-
-    if (sscanf(argStrPtr, "%lg", &reg.value.immed) == 1)
-    {
-        reg.argType = ImmediateNumberArg;
-        reg.error = EVERYTHING_FINE;
-
-        return reg;
-    }
-
-    char regType = 0;
-    if (sscanf(argStrPtr, "r%cx", &regType) == 1)
-    {
-        reg.argType = RegisterArg;
-        reg.value.regNum = regType - 'a' + 1;
-        reg.error = EVERYTHING_FINE;
-
-        return reg;
-    }
-
-    char label[MAX_LABEL_SIZE + 1] = "";
-    if (sscanf(argStrPtr, "%32s", label) == 1)
-    {
-        reg.argType = LabelArg;
-
-        CodePositionResult codePositionResult = _getLabelCodePosition(labelArray, label);
-        if (codePositionResult.error)
-        {
-            reg.argType = LabelArg;
-            reg.value.codePosition = LABEL_NOT_FOUND;
-            reg.error   = codePositionResult.error;
-
-            return reg;
-        }
-
-        reg.value.codePosition = codePositionResult.value;
-        reg.error = EVERYTHING_FINE;
-
-        return reg;
-    }
-
-    reg.error = ERROR_SYNTAX;
-
-    return reg;
-}
-
-static uint64_t _translateCommandToBinFormat(Command command, ArgType argType)
-{
-    return ((uint64_t)command | (argType << BITS_FOR_COMMAND));
+    return ((char)command | (argType << BITS_FOR_COMMAND));
 }
