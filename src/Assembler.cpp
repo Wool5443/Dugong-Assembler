@@ -6,6 +6,9 @@
 
 #define ON_SECOND_RUN(...) if (isSecondRun) __VA_ARGS__
 
+#define FREE_JUNK fclose(byteCodeFile); fclose(listingFile); free(codeArray); \
+                  DestroyText(&code); for (size_t i = 0; i < MAX_LABELS; i++) free((void*)labelArray[i].label)
+
 const size_t LABEL_NOT_FOUND = (size_t)-1;
 
 const size_t MAX_ARGS_SIZE = sizeof(double) + 1;
@@ -91,10 +94,7 @@ ErrorCode Compile(const char* codeFilePath, const char* byteCodeFilePath, const 
 
         if (proccessError)
         {
-            fclose(byteCodeFile);
-            fclose(listingFile);
-            DestroyText(&code);
-            free(codeArray);
+            FREE_JUNK;
             return proccessError;
         }
     }
@@ -109,23 +109,14 @@ ErrorCode Compile(const char* codeFilePath, const char* byteCodeFilePath, const 
 
         if (proccessError)
         {
-            fclose(byteCodeFile);
-            fclose(listingFile);
-            DestroyText(&code);
-            free(codeArray);
+            FREE_JUNK;
             return proccessError;
         }
     }
 
-    fwrite(codeArray, codePosition, sizeof(*codeArray), byteCodeFile);
+    fwrite(codeArray, codePosition - 1, sizeof(*codeArray), byteCodeFile);
 
-    fclose(byteCodeFile);
-    fclose(listingFile);
-    DestroyText(&code);
-    free(codeArray);
-
-    for (size_t i = 0; i < MAX_LABELS; i++)
-        free((void*)labelArray[i].label);
+    FREE_JUNK;
 
     return EVERYTHING_FINE;
 }
