@@ -3,17 +3,15 @@
 
 int main(int argc, const char* argv[])
 {
-    // if (argc < 2)
-    // {
-    //     SetConsoleColor(stderr, COLOR_RED);
-    //     fprintf(stderr, "Please, give input and output files.\n");
-    //     SetConsoleColor(stderr, COLOR_WHITE);
+    if (argc < 2)
+    {
+        fprintf(stderr, "Please, give input and output files.\n");
 
-    //     return ERROR_BAD_FILE;
-    // }
+        return ERROR_BAD_FILE;
+    }
 
-    const char* codeFilePath = "ggg.dug";
-    const char* byteCodeFilePath = "byteCode.bin";
+    const char* codeFilePath = argv[1];
+    const char* byteCodeFilePath = argv[2];
     const char* listingFilePath = "listing.txt";
 
     ErrorCode compileError = Compile(codeFilePath, byteCodeFilePath, listingFilePath);
