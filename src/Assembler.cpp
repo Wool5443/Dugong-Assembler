@@ -59,7 +59,7 @@ static ErrorCode _proccessLine(char* codeArray, size_t* codePosition,
 static ErrorCode _insertLabel(Label* labelArray, size_t* freeLabelCell, const String* curLine, const char* labelEnd,
                               size_t codePosition);
 
-static ArgResult _getArg(const char* argStr, const Label labelArray[]);
+static ArgResult _parseArg(const char* argStr, const Label labelArray[]);
 
 static CodePositionResult _getLabelCodePosition(const Label labelArray[], const char* label);
 
@@ -165,7 +165,7 @@ static ErrorCode _proccessLine(char* codeArray, size_t* codePosition,
                                                                                               \
         if (hasArg)                                                                           \
         {                                                                                     \
-            ArgResult arg = _getArg(curLine->text + commandLength + 1, labelArray);           \
+            ArgResult arg = _parseArg(curLine->text + commandLength + 1, labelArray);           \
             RETURN_ERROR(arg.error);                                                          \
                                                                                               \
             char cmd = _translateCommandToBinFormat(CMD_ ## name, arg.argType);               \
@@ -209,7 +209,7 @@ static ErrorCode _proccessLine(char* codeArray, size_t* codePosition,
     return EVERYTHING_FINE;
 }
 
-static ArgResult _getArg(const char* argStr, const Label labelArray[])
+static ArgResult _parseArg(const char* argStr, const Label labelArray[])
 {
     if (!argStr || !labelArray)
         return {LABEL_NOT_FOUND, ERROR_NULLPTR};
