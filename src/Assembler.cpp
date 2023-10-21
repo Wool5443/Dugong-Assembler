@@ -246,7 +246,20 @@ static ArgResult _getArg(const char* argStr, const Label labelArray[])
     if (sscanf(argStr, "%lg%n", &immed, &readChars) == 1)
     {
         result.argType |= ImmediateNumberArg;
-        result.immed = immed;
+        if (result.argType & RAMArg)
+        {
+            uint64_t intImmed = (uint64_t)immed;
+            result.immed = *(double*)&intImmed;
+        }
+        else
+            result.immed = immed;
+    }
+
+    if (result.argType & ImmediateNumberArg && result.argType & RegisterArg && plusPtr)
+    {
+        result.error = ERROR_SYNTAX;
+
+        return result;
     }
 
     if (result.argType == 0)
