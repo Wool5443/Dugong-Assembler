@@ -252,13 +252,7 @@ static ArgResult _parseArg(const char* argStr, const Label labelArray[])
     if (sscanf(argStr, "%lg%n", &immed, &readChars) == 1)
     {
         result.argType |= ImmediateNumberArg;
-        if (result.argType & RAMArg)
-        {
-            uint64_t intImmed = (uint64_t)immed;
-            result.immed = *(double*)&intImmed;
-        }
-        else
-            result.immed = immed;
+        result.immed = immed;
 
         argStr += readChars;
     }
@@ -285,7 +279,7 @@ static ArgResult _parseArg(const char* argStr, const Label labelArray[])
         }
 
         result.argType = ImmediateNumberArg;
-        *(uint64_t*)&result.immed = labelCodePostitionResult.value;
+        result.immed = (double)labelCodePostitionResult.value;
         result.error = EVERYTHING_FINE;
 
         argStr += readChars;
