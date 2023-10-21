@@ -9,10 +9,12 @@
 #define FREE_JUNK fclose(byteCodeFile); fclose(listingFile); free(codeArray); \
                   DestroyText(&code); for (size_t i = 0; i < MAX_LABELS; i++) free((void*)labelArray[i].label)
 
+static const size_t MAX_LABELS = 32;
+static const size_t MAX_LABEL_SIZE = 32;
 const size_t LABEL_NOT_FOUND = (size_t)-1;
 
-const size_t MAX_ARGS_SIZE = sizeof(double) + 1;
-const size_t REG_NUM_BYTE  = MAX_ARGS_SIZE - 1;
+static const size_t MAX_ARGS_SIZE = sizeof(double) + 1;
+static const size_t REG_NUM_BYTE  = MAX_ARGS_SIZE - 1;
 
 enum ArgType
 {
