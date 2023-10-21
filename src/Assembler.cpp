@@ -114,7 +114,7 @@ ErrorCode Compile(const char* codeFilePath, const char* byteCodeFilePath, const 
         }
     }
 
-    fwrite(codeArray, codePosition - 1, sizeof(*codeArray), byteCodeFile);
+    fwrite(codeArray, codePosition, sizeof(*codeArray), byteCodeFile);
 
     FREE_JUNK;
 
@@ -174,7 +174,7 @@ static ErrorCode _proccessLine(char* codeArray, size_t* codePosition,
             if (arg.argType & ImmediateNumberArg)                                             \
             {                                                                                 \
                 memcpy(codeArray + *codePosition, &arg.immed, sizeof(double));                \
-                *codePosition += 8;                                                           \
+                *codePosition += sizeof(double);                                              \
             }                                                                                 \
             if (arg.argType & RegisterArg)                                                    \
             {                                                                                 \
