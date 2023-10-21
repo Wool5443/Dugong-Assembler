@@ -257,7 +257,7 @@ static ArgResult _parseArg(const char* argStr, const Label labelArray[])
             result.immed = immed;
     }
 
-    if (result.argType & ImmediateNumberArg && result.argType & RegisterArg && plusPtr)
+    if ((result.argType & ImmediateNumberArg) && (result.argType & RegisterArg) && !plusPtr)
     {
         result.error = ERROR_SYNTAX;
 
