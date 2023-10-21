@@ -1,4 +1,4 @@
-TARGET=main
+TARGET=DugongAssembler
 CC=g++
 
 HEADERS=-I./headers/
