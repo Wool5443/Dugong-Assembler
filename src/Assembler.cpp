@@ -16,6 +16,8 @@ const size_t LABEL_NOT_FOUND = (size_t)-1;
 static const size_t MAX_ARGS_SIZE = sizeof(double) + 1;
 static const size_t REG_NUM_BYTE  = MAX_ARGS_SIZE - 1;
 
+typedef unsigned char byte;
+
 enum ArgType
 {
     ImmediateNumberArg = 1,
@@ -36,8 +38,8 @@ enum Command
 struct ArgResult
 {
     double immed;
-    char regNum;
-    char argType;
+    byte regNum;
+    byte argType;
     ErrorCode error;
 };
 
@@ -53,7 +55,7 @@ struct Label
     size_t codePosition;
 };
 
-static ErrorCode _proccessLine(char* codeArray, size_t* codePosition,
+static ErrorCode _proccessLine(byte* codeArray, size_t* codePosition,
                                Label labelArray[], size_t* freeLabelCell,
                                String* curLine, FILE* listingFile,
                                bool isSecondRun);
@@ -65,7 +67,7 @@ static ArgResult _parseArg(const char* argStr, const Label labelArray[]);
 
 static CodePositionResult _getLabelCodePosition(const Label labelArray[], const char* label);
 
-static char _translateCommandToBinFormat(Command command, char argType);
+static byte _translateCommandToBinFormat(Command command, byte argType);
 
 ErrorCode Compile(const char* codeFilePath, const char* byteCodeFilePath, const char* listingFilePath)
 {
@@ -79,7 +81,7 @@ ErrorCode Compile(const char* codeFilePath, const char* byteCodeFilePath, const 
 
     Text code = CreateText(codeFilePath, '\n');
 
-    char* codeArray = (char*)calloc(code.numberOfLines * 2, sizeof(double));
+    byte* codeArray = (byte*)calloc(code.numberOfLines * 2, sizeof(double));
 
     Label  labelArray[MAX_LABELS] = {};
     size_t freeLabelCell = 0;
@@ -124,7 +126,7 @@ ErrorCode Compile(const char* codeFilePath, const char* byteCodeFilePath, const 
 }
 
 // AUTO GENERATED!!!!!! CHANGE Commands.gen IF NEEDED!!!!!
-static ErrorCode _proccessLine(char* codeArray, size_t* codePosition,
+static ErrorCode _proccessLine(byte* codeArray, size_t* codePosition,
                                Label labelArray[], size_t* freeLabelCell,
                                String* curLine, FILE* listingFile,
                                bool isSecondRun)
@@ -170,7 +172,7 @@ static ErrorCode _proccessLine(char* codeArray, size_t* codePosition,
             ArgResult arg = _parseArg(curLine->text + commandLength + 1, labelArray);         \
             RETURN_ERROR(arg.error);                                                          \
                                                                                               \
-            char cmd = _translateCommandToBinFormat(CMD_ ## name, arg.argType);               \
+            byte cmd = _translateCommandToBinFormat(CMD_ ## name, arg.argType);               \
             memcpy(codeArray + (*codePosition)++, &cmd, 1);                                   \
                                                                                               \
             if (arg.argType & ImmediateNumberArg)                                             \
@@ -190,7 +192,7 @@ static ErrorCode _proccessLine(char* codeArray, size_t* codePosition,
         }                                                                                     \
         else                                                                                  \
         {                                                                                     \
-            char cmd = (char)CMD_ ## name;                                                    \
+            byte cmd = (byte)CMD_ ## name;                                                    \
             memcpy(codeArray + (*codePosition)++, &cmd, 1);                                   \
             ON_SECOND_RUN(fprintf(listingFile, "0x%02hX %38s", cmd, ""));                     \
         }                                                                                     \
@@ -325,7 +327,7 @@ static CodePositionResult _getLabelCodePosition(const Label labelArray[], const 
     return {LABEL_NOT_FOUND, EVERYTHING_FINE};
 }
 
-static char _translateCommandToBinFormat(Command command, char argType)
+static byte _translateCommandToBinFormat(Command command, byte argType)
 {
-    return ((char)command | (argType << BITS_FOR_COMMAND));
+    return ((byte)command | (argType << BITS_FOR_COMMAND));
 }
