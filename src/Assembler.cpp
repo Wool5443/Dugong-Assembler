@@ -167,7 +167,7 @@ static ErrorCode _proccessLine(char* codeArray, size_t* codePosition,
                                                                                               \
         if (hasArg)                                                                           \
         {                                                                                     \
-            ArgResult arg = _parseArg(curLine->text + commandLength + 1, labelArray);           \
+            ArgResult arg = _parseArg(curLine->text + commandLength + 1, labelArray);         \
             RETURN_ERROR(arg.error);                                                          \
                                                                                               \
             char cmd = _translateCommandToBinFormat(CMD_ ## name, arg.argType);               \
