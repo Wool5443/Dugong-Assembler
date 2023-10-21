@@ -302,7 +302,7 @@ int StringIsEmptyChars(const char* string, char terminator)
     while (isspace(*string) && *string != terminator)
         *string++;
 
-    if (*string == 0)
+    if (*string == 0 || *string == terminator)
         return 1;
     return 0;
 }

@@ -221,9 +221,10 @@ static ArgResult _parseArg(const char* argStr, const Label labelArray[])
     ArgResult result = {};
 
     const char* bracketPtr = strchr(argStr, '[');
-    if (bracketPtr)
+    const char* backBracketPtr = strchr(argStr, ']');
+    if (bracketPtr || backBracketPtr)
     {
-        if (!strchr(argStr, ']'))
+        if (!bracketPtr || !backBracketPtr)
         {
             result.error = ERROR_SYNTAX;
             return result;
@@ -239,6 +240,7 @@ static ArgResult _parseArg(const char* argStr, const Label labelArray[])
     {
         result.argType |= RegisterArg;
         result.regNum = regType -'a' + 1;
+
         argStr += readChars;
     }
 
@@ -257,6 +259,8 @@ static ArgResult _parseArg(const char* argStr, const Label labelArray[])
         }
         else
             result.immed = immed;
+
+        argStr += readChars;
     }
 
     if ((result.argType & ImmediateNumberArg) && (result.argType & RegisterArg) && !plusPtr)
@@ -270,7 +274,7 @@ static ArgResult _parseArg(const char* argStr, const Label labelArray[])
     {
         char label[MAX_LABEL_SIZE] = "";
 
-        sscanf(argStr, "%s", label);
+        sscanf(argStr, "%s%n", label, &readChars);
 
         CodePositionResult labelCodePostitionResult = _getLabelCodePosition(labelArray, label);
 
@@ -283,7 +287,18 @@ static ArgResult _parseArg(const char* argStr, const Label labelArray[])
         result.argType = ImmediateNumberArg;
         *(uint64_t*)&result.immed = labelCodePostitionResult.value;
         result.error = EVERYTHING_FINE;
+
+        argStr += readChars;
     }
+
+    if (backBracketPtr)
+    {
+        if (!StringIsEmptyChars(argStr, ']') || !StringIsEmptyChars(backBracketPtr + 1, 0))
+            result.error = ERROR_SYNTAX;
+    }
+    else if (!StringIsEmptyChars(argStr, 0))
+        result.error = ERROR_SYNTAX;
+        
 
     if (result.argType == 0 || result.argType == RAMArg)
         result.error = ERROR_SYNTAX;
