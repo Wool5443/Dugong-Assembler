@@ -54,8 +54,8 @@ do                                                                              
 #define RETURN_ERROR_RESULT(result, poison)                                                                         \
 do                                                                                                                  \
 {                                                                                                                   \
-    if (RESULT.error)                                                                                              \
-        return {POISON, RESULT.error};                                                                             \
+    if (result.error)                                                                                              \
+        return {POISON, result.error};                                                                             \
 } while (0)
 
 /**
