@@ -55,7 +55,7 @@ do                                                                              
 do                                                                                                                  \
 {                                                                                                                   \
     if (result.error)                                                                                              \
-        return {POISON, result.error};                                                                             \
+        return {poison, result.error};                                                                             \
 } while (0)
 
 /**
@@ -89,7 +89,7 @@ do {                                                                            
  *
  * @param [in] statement - the condition to check.
  * @param [in] error - what can happen @see ErrorCode.
- * @param [in] exitCode - operation to perform before exiting the program.
+ * @param [in] exitCode - code to perform before exiting the program.
  *
  * @note If there is nothing to perform pass nothing.
  * 
@@ -108,10 +108,10 @@ do {                                                                            
 /**
  * @brief Soft assert which tells the file, function and line where the error occurred.
  *
- * @param [in] STATEMENT - the condition to check.
- * @param [in] VALUE - the value to form result struct.
- * @param [in] ERR_CODE - what can happen @see ErrorCode.
- * @param [in] EXIT_CMD - operation to perform before exiting the program.
+ * @param [in] statement - the condition to check.
+ * @param [in] value - the value to form result struct.
+ * @param [in] error - what can happen @see ErrorCode.
+ * @param [in] exitCode - code to perform before exiting the program.
  *
  * @note If there is nothing to perform pass nothing.
  * 
