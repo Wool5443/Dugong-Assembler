@@ -76,7 +76,7 @@ ErrorCode Compile(const char* codeFilePath, const char* byteCodeFilePath, const 
     FILE* byteCodeFile = fopen(byteCodeFilePath, "wb");
     MyAssertSoft(byteCodeFile, ERROR_BAD_FILE);
 
-    FILE* listingFile  = fopen(listingFilePath,   "w");
+    FILE* listingFile  = fopen(listingFilePath,  "w");
     MyAssertSoft(listingFile,  ERROR_BAD_FILE);
 
     Text code = CreateText(codeFilePath, '\n');
@@ -98,6 +98,9 @@ ErrorCode Compile(const char* codeFilePath, const char* byteCodeFilePath, const 
 
         if (proccessError)
         {
+            SetConsoleColor(stdout, COLOR_RED);
+            printf("%s in line #%zu: \"%s\"\n", ERROR_CODE_NAMES[proccessError], lineIndex, curLine->text);
+            SetConsoleColor(stdout, COLOR_WHITE);
             FREE_JUNK;
             return proccessError;
         }
@@ -113,6 +116,9 @@ ErrorCode Compile(const char* codeFilePath, const char* byteCodeFilePath, const 
 
         if (proccessError)
         {
+            SetConsoleColor(stdout, COLOR_RED);
+            printf("%s in line #%zu: \"%s\"\n", ERROR_CODE_NAMES[proccessError], lineIndex, curLine->text);
+            SetConsoleColor(stdout, COLOR_WHITE);
             FREE_JUNK;
             return proccessError;
         }
