@@ -6,7 +6,7 @@
 
 #define ON_SECOND_RUN(...) if (isSecondRun) __VA_ARGS__
 
-#define FREE_JUNK fclose(byteCodeFile); fclose(listingFile); free(codeArray); \
+#define FREE_JUNK fclose(binaryFile); fclose(listingFile); free(codeArray); \
                   DestroyText(&code); for (size_t i = 0; i < MAX_LABELS; i++) free((void*)labelArray[i].label)
 
 static const size_t MAX_LABELS = 32;
@@ -35,11 +35,16 @@ enum Command
     #undef DEF_COMMAND
 };
 
-struct ArgResult
+struct Arg
 {
     double immed;
     byte regNum;
     byte argType;
+};
+
+struct ArgResult
+{
+    Arg value;
     ErrorCode error;
 };
 
@@ -69,15 +74,17 @@ static CodePositionResult _getLabelCodePosition(const Label labelArray[], const 
 
 static byte _translateCommandToBinFormat(Command command, byte argType);
 
-ErrorCode Compile(const char* codeFilePath, const char* byteCodeFilePath, const char* listingFilePath)
+ErrorCode Compile(const char* codeFilePath, const char* binaryFilePath, const char* listingFilePath)
 {
     MyAssertSoft(codeFilePath, ERROR_NULLPTR);
+    MyAssertSoft(binaryFilePath, ERROR_NULLPTR);
+    MyAssertSoft(listingFilePath, ERROR_NULLPTR);
 
-    FILE* byteCodeFile = fopen(byteCodeFilePath, "wb");
-    MyAssertSoft(byteCodeFile, ERROR_BAD_FILE);
+    FILE* binaryFile = fopen(binaryFilePath, "wb");
+    MyAssertSoft(binaryFile, ERROR_BAD_FILE);
 
     FILE* listingFile  = fopen(listingFilePath,  "w");
-    MyAssertSoft(listingFile,  ERROR_BAD_FILE);
+    MyAssertSoft(listingFile, ERROR_BAD_FILE);
 
     Text code = CreateText(codeFilePath, '\n');
 
@@ -124,7 +131,7 @@ ErrorCode Compile(const char* codeFilePath, const char* byteCodeFilePath, const 
         }
     }
 
-    fwrite(codeArray, codePosition, sizeof(*codeArray), byteCodeFile);
+    fwrite(codeArray, codePosition, sizeof(*codeArray), binaryFile);
 
     FREE_JUNK;
 
@@ -175,8 +182,10 @@ static ErrorCode _proccessLine(byte* codeArray, size_t* codePosition,
                                                                                               \
         if (hasArg)                                                                           \
         {                                                                                     \
-            ArgResult arg = _parseArg(curLine->text + commandLength + 1, labelArray);         \
-            RETURN_ERROR(arg.error);                                                          \
+            ArgResult argRes = _parseArg(curLine->text + commandLength + 1, labelArray);      \
+            RETURN_ERROR(argRes.error);                                                       \
+                                                                                              \
+            Arg arg = argRes.value;                                                           \
                                                                                               \
             byte cmd = _translateCommandToBinFormat(CMD_ ## name, arg.argType);               \
             memcpy(codeArray + (*codePosition)++, &cmd, 1);                                   \
@@ -221,22 +230,20 @@ static ErrorCode _proccessLine(byte* codeArray, size_t* codePosition,
 
 static ArgResult _parseArg(const char* argStr, const Label labelArray[])
 {
-    if (!argStr || !labelArray)
-        return {LABEL_NOT_FOUND, ERROR_NULLPTR};
+    MyAssertSoftResult(argStr,     {}, ERROR_NULLPTR);
+    MyAssertSoftResult(labelArray, {}, ERROR_NULLPTR);
 
-    ArgResult result = {};
+    Arg arg = {};
 
     const char* bracketPtr = strchr(argStr, '[');
     const char* backBracketPtr = strchr(argStr, ']');
     if (bracketPtr || backBracketPtr)
     {
         if (!bracketPtr || !backBracketPtr)
-        {
-            result.error = ERROR_SYNTAX;
-            return result;
-        }
+            return {{}, ERROR_SYNTAX};
+        
         argStr = bracketPtr + 1;
-        result.argType |= RAMArg;
+        arg.argType |= RAMArg;
     }
 
     int readChars = 0;
@@ -244,8 +251,8 @@ static ArgResult _parseArg(const char* argStr, const Label labelArray[])
     int regType = 0;
     if (sscanf(argStr, "r%cx%n", &regType, &readChars) == 1)
     {
-        result.argType |= RegisterArg;
-        result.regNum = regType -'a' + 1;
+        arg.argType |= RegisterArg;
+        arg.regNum = regType -'a' + 1;
 
         argStr += readChars;
     }
@@ -257,20 +264,16 @@ static ArgResult _parseArg(const char* argStr, const Label labelArray[])
     double immed = 0;
     if (sscanf(argStr, "%lg%n", &immed, &readChars) == 1)
     {
-        result.argType |= ImmediateNumberArg;
-        result.immed = immed;
+        arg.argType |= ImmediateNumberArg;
+        arg.immed = immed;
 
         argStr += readChars;
     }
 
-    if ((result.argType & ImmediateNumberArg) && (result.argType & RegisterArg) && !plusPtr)
-    {
-        result.error = ERROR_SYNTAX;
+    if ((arg.argType & ImmediateNumberArg) && (arg.argType & RegisterArg) && !plusPtr)
+        return {{}, ERROR_SYNTAX};
 
-        return result;
-    }
-
-    if (result.argType == 0)
+    if (arg.argType == 0)
     {
         char label[MAX_LABEL_SIZE] = "";
 
@@ -279,14 +282,10 @@ static ArgResult _parseArg(const char* argStr, const Label labelArray[])
         CodePositionResult labelCodePostitionResult = _getLabelCodePosition(labelArray, label);
 
         if (labelCodePostitionResult.error)
-        {
-            result.error = ERROR_SYNTAX;
-            return result;
-        }
+            return {{}, ERROR_SYNTAX};
 
-        result.argType = ImmediateNumberArg;
-        result.immed = (double)labelCodePostitionResult.value;
-        result.error = EVERYTHING_FINE;
+        arg.argType = ImmediateNumberArg;
+        arg.immed = (double)labelCodePostitionResult.value;
 
         argStr += readChars;
     }
@@ -294,21 +293,26 @@ static ArgResult _parseArg(const char* argStr, const Label labelArray[])
     if (backBracketPtr)
     {
         if (!StringIsEmptyChars(argStr, ']') || !StringIsEmptyChars(backBracketPtr + 1, 0))
-            result.error = ERROR_SYNTAX;
+            return {{}, ERROR_SYNTAX};
     }
     else if (!StringIsEmptyChars(argStr, 0))
-        result.error = ERROR_SYNTAX;
+        return {{}, ERROR_SYNTAX};
         
 
-    if (result.argType == 0 || result.argType == RAMArg)
-        result.error = ERROR_SYNTAX;
+    if (arg.argType == 0 || arg.argType == RAMArg)
+        return {{}, ERROR_SYNTAX};
 
-    return result;
+    return {arg, EVERYTHING_FINE};
 }
 
 static ErrorCode _insertLabel(Label labelArray[], size_t* freeLabelCell, const String* curLine, const char* labelEnd,
                               size_t codePosition)
 {
+    MyAssertSoft(labelArray, ERROR_NULLPTR);
+    MyAssertSoft(freeLabelCell, ERROR_NULLPTR);
+    MyAssertSoft(curLine, ERROR_NULLPTR);
+    MyAssertSoft(labelEnd, ERROR_NULLPTR);
+
     const char* labelStart = curLine->text;
 
     while (isspace(*labelStart) && labelStart < labelEnd) labelStart++;
@@ -333,12 +337,13 @@ static ErrorCode _insertLabel(Label labelArray[], size_t* freeLabelCell, const S
 
 static CodePositionResult _getLabelCodePosition(const Label labelArray[], const char* label)
 {
-    if (!labelArray || !label)
-        return {LABEL_NOT_FOUND, ERROR_NULLPTR};
+    MyAssertSoftResult(labelArray, LABEL_NOT_FOUND, ERROR_NULLPTR);
+    MyAssertSoftResult(label,      LABEL_NOT_FOUND, ERROR_NULLPTR);
 
     for (size_t i = 0; i < MAX_LABELS; i++)
         if (labelArray[i].label && strncmp(labelArray[i].label, label, MAX_LABEL_SIZE) == 0)
             return {labelArray[i].codePosition, EVERYTHING_FINE};
+
     return {LABEL_NOT_FOUND, EVERYTHING_FINE};
 }
 
