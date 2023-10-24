@@ -9,8 +9,9 @@
 #define FREE_JUNK fclose(binaryFile); fclose(listingFile); free(codeArray); \
                   DestroyText(&code); for (size_t i = 0; i < MAX_LABELS; i++) free((void*)labelArray[i].label)
 
-static const size_t MAX_LABELS = 32;
-static const size_t MAX_LABEL_SIZE = 32;
+static const size_t MAX_LABELS = 128;
+static const size_t MAX_LABEL_SIZE = 48;
+static const size_t MAX_COMMAND_LENGTH = 4;
 const size_t LABEL_NOT_FOUND = (size_t)-1;
 
 static const size_t MAX_ARGS_SIZE = sizeof(double) + 1;
@@ -138,7 +139,6 @@ ErrorCode Compile(const char* codeFilePath, const char* binaryFilePath, const ch
     return EVERYTHING_FINE;
 }
 
-// AUTO GENERATED!!!!!! CHANGE Commands.gen IF NEEDED!!!!!
 static ErrorCode _proccessLine(byte* codeArray, size_t* codePosition,
                                Label labelArray[], size_t* freeLabelCell,
                                String* curLine, FILE* listingFile,
@@ -146,17 +146,14 @@ static ErrorCode _proccessLine(byte* codeArray, size_t* codePosition,
 {
     char* endLinePtr = (char*)strchr(curLine->text, '\n');
     if (endLinePtr)
-        *endLinePtr = 0;
+        *endLinePtr = '\0';
 
     char* commentPtr = (char*)strchr(curLine->text, ';');
     if (commentPtr)
-        *commentPtr = 0;
+        *commentPtr = '\0';
 
     if (StringIsEmptyChars(curLine))
         return EVERYTHING_FINE;
-
-    char command[5] = "";
-    int commandLength = 0;
 
     const char* labelEnd = strchr(curLine->text, ':');
     if (labelEnd)
@@ -170,6 +167,9 @@ static ErrorCode _proccessLine(byte* codeArray, size_t* codePosition,
             return labelError;
         }
     }
+
+    char command[MAX_COMMAND_LENGTH + 1] = "";
+    int commandLength = 0;
 
     if (sscanf(curLine->text, "%4s%n", command, &commandLength) != 1)
         return ERROR_SYNTAX;
@@ -235,7 +235,7 @@ static ArgResult _parseArg(const char* argStr, const Label labelArray[])
 
     Arg arg = {};
 
-    const char* bracketPtr = strchr(argStr, '[');
+    const char* bracketPtr     = strchr(argStr, '[');
     const char* backBracketPtr = strchr(argStr, ']');
     if (bracketPtr || backBracketPtr)
     {
@@ -245,6 +245,9 @@ static ArgResult _parseArg(const char* argStr, const Label labelArray[])
         argStr = bracketPtr + 1;
         arg.argType |= RAMArg;
     }
+
+    char* plusPtr = (char*)strchr(argStr, '+');
+    *plusPtr = '\0';
 
     int readChars = 0;
 
@@ -257,23 +260,7 @@ static ArgResult _parseArg(const char* argStr, const Label labelArray[])
         argStr += readChars;
     }
 
-    const char* plusPtr = strchr(argStr, '+');
-    if (plusPtr)
-        argStr = plusPtr + 1;
-
-    double immed = 0;
-    if (sscanf(argStr, "%lg%n", &immed, &readChars) == 1)
-    {
-        arg.argType |= ImmediateNumberArg;
-        arg.immed = immed;
-
-        argStr += readChars;
-    }
-
-    if ((arg.argType & ImmediateNumberArg) && (arg.argType & RegisterArg) && !plusPtr)
-        return {{}, ERROR_SYNTAX};
-
-    if (arg.argType == 0)
+    if ((arg.argType & RegisterArg) == 0)
     {
         char label[MAX_LABEL_SIZE] = "";
 
@@ -289,6 +276,25 @@ static ArgResult _parseArg(const char* argStr, const Label labelArray[])
 
         argStr += readChars;
     }
+
+    if (plusPtr)
+    {
+        if (!StringIsEmptyChars(argStr, '+'))
+            return {{}, ERROR_SYNTAX};
+        argStr = plusPtr + 1;
+    }
+
+    double immed = 0;
+    if (sscanf(argStr, "%lg%n", &immed, &readChars) == 1)
+    {
+        arg.argType |= ImmediateNumberArg;
+        arg.immed += immed;
+
+        argStr += readChars;
+    }
+
+    if ((arg.argType & ImmediateNumberArg) && (arg.argType & RegisterArg) && !plusPtr)
+        return {{}, ERROR_SYNTAX};
 
     if (backBracketPtr)
     {
@@ -313,6 +319,9 @@ static ErrorCode _insertLabel(Label labelArray[], size_t* freeLabelCell, const S
     MyAssertSoft(curLine, ERROR_NULLPTR);
     MyAssertSoft(labelEnd, ERROR_NULLPTR);
 
+    if (*freeLabelCell >= MAX_LABELS)
+        return ERROR_TOO_MANY_LABELS;
+
     const char* labelStart = curLine->text;
 
     while (isspace(*labelStart) && labelStart < labelEnd) labelStart++;
@@ -325,7 +334,7 @@ static ErrorCode _insertLabel(Label labelArray[], size_t* freeLabelCell, const S
     char* label = (char*)calloc(labelLength + 1, 1);
 
     strncpy(label, labelStart, labelLength);
-    label[labelLength] = 0;
+    label[labelLength] = '\0';
 
     labelArray[*freeLabelCell].label = label;
     labelArray[*freeLabelCell].codePosition = codePosition;
