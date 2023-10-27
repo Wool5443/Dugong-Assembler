@@ -159,7 +159,14 @@ static ErrorCode _proccessLine(byte* codeArray, size_t* codePosition,
     if (labelEnd)
     {
         if (isSecondRun)
+        {
+            if (commentPtr)
+                *commentPtr = ';';
+            fprintf(listingFile, "%82s%s\n", "", curLine->text);
+            if (commentPtr)
+                *commentPtr = '\0';
             return EVERYTHING_FINE;
+        }
 
         if (labelEnd)
         {
