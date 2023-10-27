@@ -1,3 +1,4 @@
+#include <string.h>
 #include "Assembler.hpp"
 #include "Utils.hpp"
 
@@ -12,9 +13,13 @@ int main(int argc, const char* argv[])
 
     const char* codeFilePath = argv[1];
     const char* byteCodeFilePath = argv[2];
-    const char* listingFilePath = "listing.txt";
+    char* listingFilePath = (char*)calloc(strlen(byteCodeFilePath) + sizeof("_listing.txt"), 1);
+    strcpy(listingFilePath, byteCodeFilePath);
+    strcat(listingFilePath, "_listing.txt");
 
     ErrorCode compileError = Compile(codeFilePath, byteCodeFilePath, listingFilePath);
+
+    free(listingFilePath);
 
     if (compileError)
     {
