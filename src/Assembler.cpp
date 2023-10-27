@@ -152,7 +152,7 @@ static ErrorCode _proccessLine(byte* codeArray, size_t* codePosition,
     if (commentPtr)
         *commentPtr = '\0';
 
-    if (StringIsEmptyChars(curLine))
+    if (StringIsEmptyChars(curLine->text, '\0'))
         return EVERYTHING_FINE;
 
     const char* labelEnd = strchr(curLine->text, ':');
@@ -256,8 +256,9 @@ static ArgResult _parseArg(const char* argStr, const Label labelArray[], bool is
     int readChars = 0;
 
     int regType = 0;
-    if (sscanf(argStr, "r%cx%n", &regType, &readChars) == 1)
+    if (sscanf(argStr, "r%c%n", (char*)&regType, &readChars) == 1 && argStr[readChars] == 'x')
     {
+        readChars += 1;
         arg.argType |= RegisterArg;
         arg.regNum = regType -'a' + 1;
 
@@ -265,6 +266,8 @@ static ArgResult _parseArg(const char* argStr, const Label labelArray[], bool is
     }
     else
     {
+        readChars = 0;
+
         double immed = 0;
         if (sscanf(argStr, "%lg%n", &immed, &readChars) == 1)
         {
@@ -275,6 +278,8 @@ static ArgResult _parseArg(const char* argStr, const Label labelArray[], bool is
         }
         else
         {
+            readChars = 0;
+
             char label[MAX_LABEL_SIZE] = "";
 
             sscanf(argStr, "%s%n", label, &readChars);
@@ -311,6 +316,8 @@ static ArgResult _parseArg(const char* argStr, const Label labelArray[], bool is
         }
         else
         {
+            readChars = 0;
+
             char label[MAX_LABEL_SIZE] = "";
 
             sscanf(argStr, "%s%n", label, &readChars);

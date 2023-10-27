@@ -4,7 +4,7 @@
 
 int main(int argc, const char* argv[])
 {
-    if (argc < 2)
+    if (argc < 3)
     {
         fprintf(stderr, "Please, give input and output files.\n");
 
