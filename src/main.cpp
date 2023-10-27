@@ -17,7 +17,15 @@ int main(int argc, const char* argv[])
     strcpy(listingFilePath, byteCodeFilePath);
     strcat(listingFilePath, "_listing.txt");
 
-    ErrorCode compileError = Compile(codeFilePath, byteCodeFilePath, listingFilePath);
+    ErrorCode compileError = EVERYTHING_FINE;
+    try
+    {
+        compileError = Compile(codeFilePath, byteCodeFilePath, listingFilePath);
+    }
+    catch (...)
+    {
+        printf("Дарова, Дедус!!!!\n");
+    }
 
     free(listingFilePath);
 
