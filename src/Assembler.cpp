@@ -89,7 +89,7 @@ ErrorCode Compile(const char* codeFilePath, const char* binaryFilePath, const ch
 
     Text code = CreateText(codeFilePath, '\n');
 
-    byte* codeArray = (byte*)calloc(code.numberOfLines * 2, sizeof(double));
+    byte* codeArray = (byte*)calloc(code.numberOfLines, sizeof(double) + 2);
 
     Label  labelArray[MAX_LABELS] = {};
     size_t freeLabelCell = 0;
