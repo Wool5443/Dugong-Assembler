@@ -94,8 +94,6 @@ ErrorCode Compile(const char* codeFilePath, const char* binaryFilePath, const ch
     Label  labelArray[MAX_LABELS] = {};
     size_t freeLabelCell = 0;
 
-    fprintf(listingFile, "Code position:%20s cmd:%4s arg:%24s original:\n", "", "", "");
-
     size_t codePosition = 0;
     for (size_t lineIndex = 0; lineIndex < code.numberOfLines; lineIndex++)
     {
@@ -113,6 +111,16 @@ ErrorCode Compile(const char* codeFilePath, const char* binaryFilePath, const ch
             return proccessError;
         }
     }
+
+    fprintf(listingFile, "Label array:\n");
+    for (size_t i = 0; i < freeLabelCell; i++)
+    {
+        fprintf(listingFile, "[%zu]\n", i);
+        fprintf(listingFile, "{\n%4scodePosition = %lg\n", "", labelArray[i].codePosition);
+        fprintf(listingFile, "%4slabel = %s\n}\n", "", labelArray[i].label);
+    }
+
+    fprintf(listingFile, "Code position:%20s cmd:%4s arg:%24s original:\n", "", "", "");
 
     codePosition = 0;
     for (size_t lineIndex = 0; lineIndex < code.numberOfLines; lineIndex++)
