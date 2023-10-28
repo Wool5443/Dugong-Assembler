@@ -68,6 +68,25 @@ static CodePositionResult _getLabelCodePosition(const Label labelArray[], const 
 
 static byte _translateCommandToBinFormat(Command command, byte argType);
 
+#define RunCompilation(isSecondRun)                                                                             \
+    codePosition = 0;                                                                                           \
+    for (size_t lineIndex = 0; lineIndex < code.numberOfLines; lineIndex++)                                     \
+    {                                                                                                           \
+        const String* curLine = &code.lines[lineIndex];                                                         \
+                                                                                                                \
+        ErrorCode proccessError = _proccessLine(codeArray, &codePosition, labelArray, &freeLabelCell,           \
+                                               (String*)curLine, listingFile, isSecondRun);                     \
+                                                                                                                \
+        if (proccessError)                                                                                      \
+        {                                                                                                       \
+            SetConsoleColor(stdout, COLOR_RED);                                                                 \
+            printf("%s in line #%zu: \"%s\"\n", ERROR_CODE_NAMES[proccessError], lineIndex, curLine->text);     \
+            SetConsoleColor(stdout, COLOR_WHITE);                                                               \
+            FREE_JUNK;                                                                                          \
+            return proccessError;                                                                               \
+        }                                                                                                       \
+    }
+
 ErrorCode Compile(const char* codeFilePath, const char* binaryFilePath, const char* listingFilePath)
 {
     MyAssertSoft(codeFilePath, ERROR_NULLPTR);
@@ -88,42 +107,11 @@ ErrorCode Compile(const char* codeFilePath, const char* binaryFilePath, const ch
     size_t freeLabelCell = 0;
 
     size_t codePosition = 0;
-    for (size_t lineIndex = 0; lineIndex < code.numberOfLines; lineIndex++)
-    {
-        const String* curLine   = &code.lines[lineIndex];
-
-        ErrorCode proccessError = _proccessLine(codeArray, &codePosition, labelArray, &freeLabelCell,
-                                               (String*)curLine, listingFile, false);
-
-        if (proccessError)
-        {
-            SetConsoleColor(stdout, COLOR_RED);
-            printf("%s in line #%zu: \"%s\"\n", ERROR_CODE_NAMES[proccessError], lineIndex, curLine->text);
-            SetConsoleColor(stdout, COLOR_WHITE);
-            FREE_JUNK;
-            return proccessError;
-        }
-    }
+    RunCompilation(false);
 
     fprintf(listingFile, "Code position:%20s cmd:%4s arg:%24s original:\n", "", "", "");
 
-    codePosition = 0;
-    for (size_t lineIndex = 0; lineIndex < code.numberOfLines; lineIndex++)
-    {
-        const String* curLine = &code.lines[lineIndex];
-    
-        ErrorCode proccessError = _proccessLine(codeArray, &codePosition, labelArray, &freeLabelCell,
-                                               (String*)curLine, listingFile, true);
-
-        if (proccessError)
-        {
-            SetConsoleColor(stdout, COLOR_RED);
-            printf("%s in line #%zu: \"%s\"\n", ERROR_CODE_NAMES[proccessError], lineIndex, curLine->text);
-            SetConsoleColor(stdout, COLOR_WHITE);
-            FREE_JUNK;
-            return proccessError;
-        }
-    }
+    RunCompilation(true);
 
     fprintf(listingFile, "\nLabel array:\n");
     for (size_t i = 0; i < freeLabelCell; i++)
