@@ -2,7 +2,6 @@
 #include <ctype.h>
 #include "Assembler.hpp"
 #include "OneginFunctions.hpp"
-#include "SPUsettings.ini"
 
 #define ON_SECOND_RUN(...) if (isSecondRun) __VA_ARGS__
 
@@ -18,13 +17,7 @@ static const size_t MAX_ARGS_SIZE = sizeof(double) + 1;
 static const size_t REG_NUM_BYTE  = MAX_ARGS_SIZE - 1;
 
 typedef unsigned char byte;
-
-enum ArgType
-{
-    ImmediateNumberArg = 1,
-    RegisterArg        = 2,
-    RAMArg             = 4,
-};
+#include "SPUsettings.ini"
 
 enum Command
 {
