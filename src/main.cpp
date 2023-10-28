@@ -2,7 +2,7 @@
 #include "Assembler.hpp"
 #include "Utils.hpp"
 
-int main(int argc, const char* argv[])
+int main(int argc, const char* const argv[])
 {
     if (argc < 3)
     {
