@@ -64,6 +64,12 @@ static ErrorCode _insertLabel(Label* labelArray, size_t* freeLabelCell, const St
 
 static ArgResult _parseArg(const char* argStr, const Label labelArray[], bool isSecondRun);
 
+static ArgResult _parseReg(const char** argStr);
+
+static ArgResult _parseImmed(const char** argStr);
+
+static ArgResult _parseLabel(const char** argStr, bool isSecondRun, const Label labelArray[]);
+
 static CodePositionResult _getLabelCodePosition(const Label labelArray[], const char* label);
 
 static byte _translateCommandToBinFormat(Command command, byte argType);
@@ -170,45 +176,45 @@ static ErrorCode _proccessLine(byte* codeArray, size_t* codePosition,
     if (sscanf(curLine->text, "%4s%n", command, &commandLength) != 1)
         return ERROR_SYNTAX;
 
-    #define DEF_COMMAND(name, num, hasArg, ...)                                               \
-    if (strcasecmp(command, #name) == 0)                                                      \
-    {                                                                                         \
-        ON_SECOND_RUN(fprintf(listingFile, "%13s [0x%016lX] %4s", "",                         \
-                             (uint64_t)*codePosition, ""));                                   \
-                                                                                              \
-        if (hasArg)                                                                           \
-        {                                                                                     \
-            ArgResult argRes = _parseArg(curLine->text + commandLength + 1,                   \
-                                         labelArray, isSecondRun);                            \
-            RETURN_ERROR(argRes.error);                                                       \
-                                                                                              \
-            Arg arg = argRes.value;                                                           \
-                                                                                              \
-            byte cmd = _translateCommandToBinFormat(CMD_ ## name, arg.argType);               \
-            memcpy(codeArray + (*codePosition)++, &cmd, 1);                                   \
-                                                                                              \
-            if (arg.argType & ImmediateNumberArg)                                             \
-            {                                                                                 \
-                memcpy(codeArray + *codePosition, &arg.immed, sizeof(double));                \
-                *codePosition += sizeof(double);                                              \
-            }                                                                                 \
-            if (arg.argType & RegisterArg)                                                    \
-            {                                                                                 \
-                memcpy(codeArray + *codePosition, &arg.regNum, 1);                            \
-                *codePosition += 1;                                                           \
-            }                                                                                 \
-                                                                                              \
-            ON_SECOND_RUN(fprintf(listingFile, "0x%02hX %4s", cmd, ""));                      \
-            ON_SECOND_RUN(fprintf(listingFile, "0x%016lX 0x%02hhX %10s",                      \
-                                  *(uint64_t*)&arg.immed, arg.regNum, ""));                   \
-        }                                                                                     \
-        else                                                                                  \
-        {                                                                                     \
-            byte cmd = (byte)CMD_ ## name;                                                    \
-            memcpy(codeArray + (*codePosition)++, &cmd, 1);                                   \
-            ON_SECOND_RUN(fprintf(listingFile, "0x%02hX %38s", cmd, ""));                     \
-        }                                                                                     \
-    }                                                                                         \
+    #define DEF_COMMAND(name, num, hasArg, ...)                                             \
+    if (strcasecmp(command, #name) == 0)                                                    \
+    {                                                                                       \
+        ON_SECOND_RUN(fprintf(listingFile, "%13s [0x%016lX] %4s", "",                       \
+                             *codePosition, ""));                                           \
+                                                                                            \
+        if (hasArg)                                                                         \
+        {                                                                                   \
+            ArgResult argRes = _parseArg(curLine->text + commandLength + 1,                 \
+                                         labelArray, isSecondRun);                          \
+            RETURN_ERROR(argRes.error);                                                     \
+                                                                                            \
+            Arg arg = argRes.value;                                                         \
+                                                                                            \
+            byte cmd = _translateCommandToBinFormat(CMD_ ## name, arg.argType);             \
+            memcpy(codeArray + (*codePosition)++, &cmd, 1);                                 \
+                                                                                            \
+            if (arg.argType & ImmediateNumberArg)                                           \
+            {                                                                               \
+                memcpy(codeArray + *codePosition, &arg.immed, sizeof(double));              \
+                *codePosition += sizeof(double);                                            \
+            }                                                                               \
+            if (arg.argType & RegisterArg)                                                  \
+            {                                                                               \
+                memcpy(codeArray + *codePosition, &arg.regNum, 1);                          \
+                *codePosition += 1;                                                         \
+            }                                                                               \
+                                                                                            \
+            ON_SECOND_RUN(fprintf(listingFile, "0x%02hX %4s", cmd, ""));                    \
+            ON_SECOND_RUN(fprintf(listingFile, "0x%016lX 0x%02hhX %10s",                    \
+                                  *(uint64_t*)&arg.immed, arg.regNum, ""));                 \
+        }                                                                                   \
+        else                                                                                \
+        {                                                                                   \
+            byte cmd = (byte)CMD_ ## name;                                                  \
+            memcpy(codeArray + (*codePosition)++, &cmd, 1);                                 \
+            ON_SECOND_RUN(fprintf(listingFile, "0x%02hX %38s", cmd, ""));                   \
+        }                                                                                   \
+    }                                                                                       \
     else 
 
     #include "Commands.gen"
@@ -230,18 +236,15 @@ static ArgResult _parseArg(const char* argStr, const Label labelArray[], bool is
     MyAssertSoftResult(argStr,     {}, ERROR_NULLPTR);
     MyAssertSoftResult(labelArray, {}, ERROR_NULLPTR);
 
-    Arg arg = {};
-
     const char* bracketPtr = strchr(argStr, '[');
     char* backBracketPtr   = (char*)strchr(argStr, ']');
     if (bracketPtr || backBracketPtr)
     {
         if (!(bracketPtr && backBracketPtr))
             return {{}, ERROR_SYNTAX};
-        
+
         *backBracketPtr = '\0';
         
-        arg.argType |= RAMArg;
         argStr = bracketPtr + 1;
     }
 
@@ -249,102 +252,138 @@ static ArgResult _parseArg(const char* argStr, const Label labelArray[], bool is
     if (plusPtr)
         *plusPtr = '\0';
 
-    int readChars = 0;
+    ArgResult argRes = {};
 
-    int regType = 0;
-    if (sscanf(argStr, "r%c%n", (char*)&regType, &readChars) == 1 && argStr[readChars] == 'x')
     {
-        readChars += 1;
-        arg.argType |= RegisterArg;
-        arg.regNum = regType -'a' + 1;
+        ArgResult immRes1   = _parseImmed(&argStr);
 
-        argStr += readChars;
-    }
-    else
-    {
-        readChars = 0;
-
-        double immed = 0;
-        if (sscanf(argStr, "%lg%n", &immed, &readChars) == 1)
-        {
-            arg.argType |= ImmediateNumberArg;
-            arg.immed = immed;
-
-            argStr += readChars;
-        }
+        if (!immRes1.error)
+            argRes = immRes1;
         else
         {
-            readChars = 0;
-
-            char label[MAX_LABEL_SIZE] = "";
-
-            sscanf(argStr, "%s%n", label, &readChars);
-
-            CodePositionResult labelCodePostitionResult = _getLabelCodePosition(labelArray, label);
-
-            RETURN_ERROR_RESULT(labelCodePostitionResult, {});
-
-            if (isSecondRun && labelCodePostitionResult.value == LABEL_NOT_FOUND)
-                return {{}, ERROR_SYNTAX};
-
-            arg.argType |= ImmediateNumberArg;
-            arg.immed = labelCodePostitionResult.value;
-            argStr += readChars;
+            ArgResult regRes1 = _parseReg(&argStr);
+            if (!regRes1.error)
+                argRes = regRes1;
+            else
+            {
+                ArgResult labelRes1 = _parseLabel(&argStr, isSecondRun, labelArray);
+                if (!labelRes1.error)
+                    argRes = labelRes1;
+                else
+                    return {{}, ERROR_SYNTAX};
+            }
         }
     }
 
     if (plusPtr)
     {
         *plusPtr = '+';
-        if (!StringIsEmptyChars(argStr, '+'))
-            return {{}, ERROR_SYNTAX};
         argStr = plusPtr + 1;
+        ArgResult immRes2   = _parseImmed(&argStr);
 
-        readChars = 0;
-
-        double immed = 0;
-        if (sscanf(argStr, "%lg%n", &immed, &readChars) == 1)
-        {
-            arg.argType |= ImmediateNumberArg;
-            arg.immed += immed;
-
-            argStr += readChars;
-        }
+        if (!immRes2.error)
+            argRes.value.immed += immRes2.value.immed;
         else
         {
-            readChars = 0;
-
-            char label[MAX_LABEL_SIZE] = "";
-
-            sscanf(argStr, "%s%n", label, &readChars);
-
-            CodePositionResult labelCodePostitionResult = _getLabelCodePosition(labelArray, label);
-
-            RETURN_ERROR_RESULT(labelCodePostitionResult, {});
-
-            if (isSecondRun && labelCodePostitionResult.value == LABEL_NOT_FOUND)
+            ArgResult labelRes2 = _parseLabel(&argStr, isSecondRun, labelArray);
+            if (!labelRes2.error)
+                argRes.value.immed += labelRes2.value.immed;
+            else
                 return {{}, ERROR_SYNTAX};
-
-            arg.argType |= ImmediateNumberArg;
-            arg.immed += labelCodePostitionResult.value;
-            argStr += readChars;
         }
     }
 
     if (backBracketPtr)
     {
+        argRes.value.argType |= RAMArg;
         *backBracketPtr = ']';
-        if (!StringIsEmptyChars(argStr, ']') || !StringIsEmptyChars(backBracketPtr + 1, 0))
+        if (!StringIsEmptyChars(backBracketPtr + 1, 0))
             return {{}, ERROR_SYNTAX};
     }
-    else if (!StringIsEmptyChars(argStr, 0))
-        return {{}, ERROR_SYNTAX};
-        
 
-    if (arg.argType == 0 || arg.argType == RAMArg)
+    if (argRes.value.argType == 0 || argRes.value.argType == RAMArg)
         return {{}, ERROR_SYNTAX};
 
-    return {arg, EVERYTHING_FINE};
+    argRes.error = EVERYTHING_FINE;
+
+    return argRes;
+}
+
+static ArgResult _parseReg(const char** argStr)
+{
+    ArgResult argRes = {};
+    int regType = 0, readChars = 0;
+
+    if (sscanf(*argStr, "r%c%n", (char*)&regType, &readChars) == 1 && (*argStr)[readChars] == 'x' &&
+                                                                        StringIsEmptyChars(*argStr + readChars + 1, '\0'))
+    {
+        readChars += 1;
+        argRes.value.argType |= RegisterArg;
+        argRes.value.regNum   = regType -'a' + 1;
+        argRes.error          = EVERYTHING_FINE;
+
+        *argStr += readChars;
+
+        return argRes;
+    }
+    else
+        return {{}, ERROR_SYNTAX};
+}
+
+static ArgResult _parseImmed(const char** argStr)
+{
+    ArgResult argRes = {};
+
+    int readChars = 0;
+
+    double immed = 0;
+
+    if (sscanf(*argStr, "%lg%n", &immed, &readChars) == 1 && StringIsEmptyChars(*argStr + readChars, '\0'))
+    {
+        argRes.value.argType |= ImmediateNumberArg;
+        argRes.value.immed   += immed;
+        argRes.error          = EVERYTHING_FINE;
+
+        argStr += readChars;
+
+        return argRes;
+    }
+    else
+        return {{}, ERROR_SYNTAX};
+}
+
+static ArgResult _parseLabel(const char** argStr, bool isSecondRun, const Label labelArray[])
+{
+    ArgResult argRes = {};
+
+    int readChars = 0;
+
+    char label[MAX_LABEL_SIZE] = "";
+
+    sscanf(*argStr, "%s%n", label, &readChars);
+
+    CodePositionResult labelCodePostitionResult = _getLabelCodePosition(labelArray, label);
+
+    RETURN_ERROR_RESULT(labelCodePostitionResult, {});
+
+    if (labelCodePostitionResult.value != LABEL_NOT_FOUND)
+    {
+        argRes.value.argType |= ImmediateNumberArg;
+        argRes.value.immed    = labelCodePostitionResult.value;
+        argRes.error          = EVERYTHING_FINE;
+
+        *argStr += readChars;
+
+        return argRes;
+    }
+
+    if (isSecondRun)
+        return {{}, ERROR_SYNTAX};
+
+    argRes.value.argType = ImmediateNumberArg;
+    argRes.value.immed   = LABEL_NOT_FOUND;
+
+    return argRes;
 }
 
 static ErrorCode _insertLabel(Label labelArray[], size_t* freeLabelCell, const String* curLine, const char* labelEnd,
