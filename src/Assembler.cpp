@@ -70,11 +70,14 @@ static ArgResult _parseImmed(const char** argStr);
 
 static ArgResult _parseLabel(const char** argStr, bool isSecondRun, const Label labelArray[]);
 
+static ArgResult _parseImmedLabel(const char** argStr, const Label labelArray[], bool isSecondRun);
+
 static CodePositionResult _getLabelCodePosition(const Label labelArray[], const char* label);
 
 static byte _translateCommandToBinFormat(Command command, byte argType);
 
-#define RunCompilation(isSecondRun)                                                                             \
+// too many args to be a separate function
+#define RUN_COMPILATION(isSecondRun)                                                                             \
     codePosition = 0;                                                                                           \
     for (size_t lineIndex = 0; lineIndex < code.numberOfLines; lineIndex++)                                     \
     {                                                                                                           \
@@ -113,11 +116,11 @@ ErrorCode Compile(const char* codeFilePath, const char* binaryFilePath, const ch
     size_t freeLabelCell = 0;
 
     size_t codePosition = 0;
-    RunCompilation(false);
+    RUN_COMPILATION(false);
 
     fprintf(listingFile, "Code position:%20s cmd:%4s arg:%24s original:\n", "", "", "");
 
-    RunCompilation(true);
+    RUN_COMPILATION(true);
 
     fprintf(listingFile, "\nLabel array:\n");
     for (size_t i = 0; i < freeLabelCell; i++)
@@ -139,9 +142,7 @@ static ErrorCode _proccessLine(byte* codeArray, size_t* codePosition,
                                String* curLine, FILE* listingFile,
                                bool isSecondRun)
 {
-    char* endLinePtr = (char*)strchr(curLine->text, '\n');
-    if (endLinePtr)
-        *endLinePtr = '\0';
+    ((char*)curLine->text)[curLine->length] = '\0';
 
     char* commentPtr = (char*)strchr(curLine->text, ';');
     if (commentPtr)
@@ -255,23 +256,13 @@ static ArgResult _parseArg(const char* argStr, const Label labelArray[], bool is
     ArgResult argRes = {};
 
     {
-        ArgResult immRes1   = _parseImmed(&argStr);
-
-        if (!immRes1.error)
-            argRes = immRes1;
+        ArgResult regRes = _parseReg(&argStr);
+        if (!regRes.error)
+            argRes = regRes;
         else
         {
-            ArgResult regRes1 = _parseReg(&argStr);
-            if (!regRes1.error)
-                argRes = regRes1;
-            else
-            {
-                ArgResult labelRes1 = _parseLabel(&argStr, isSecondRun, labelArray);
-                if (!labelRes1.error)
-                    argRes = labelRes1;
-                else
-                    return {{}, ERROR_SYNTAX};
-            }
+            argRes = _parseImmedLabel(&argStr, labelArray, isSecondRun);
+            RETURN_ERROR_RESULT(argRes, {});
         }
     }
 
@@ -279,18 +270,11 @@ static ArgResult _parseArg(const char* argStr, const Label labelArray[], bool is
     {
         *plusPtr = '+';
         argStr = plusPtr + 1;
-        ArgResult immRes2   = _parseImmed(&argStr);
+        ArgResult immOrLabelRes = _parseImmedLabel(&argStr, labelArray, isSecondRun);
 
-        if (!immRes2.error)
-            argRes.value.immed += immRes2.value.immed;
-        else
-        {
-            ArgResult labelRes2 = _parseLabel(&argStr, isSecondRun, labelArray);
-            if (!labelRes2.error)
-                argRes.value.immed += labelRes2.value.immed;
-            else
-                return {{}, ERROR_SYNTAX};
-        }
+        RETURN_ERROR_RESULT(immOrLabelRes, {});
+
+        argRes.value.immed += immOrLabelRes.value.immed;
     }
 
     if (backBracketPtr)
@@ -384,6 +368,23 @@ static ArgResult _parseLabel(const char** argStr, bool isSecondRun, const Label 
     argRes.value.immed   = LABEL_NOT_FOUND;
 
     return argRes;
+}
+
+static ArgResult _parseImmedLabel(const char** argStr, const Label labelArray[], bool isSecondRun)
+{
+    ArgResult immRes = _parseImmed(argStr);
+
+    if (!immRes.error)
+        return immRes;
+    else
+    {
+        ArgResult labelRes = _parseLabel(argStr, isSecondRun, labelArray);
+
+        if (!labelRes.error)
+            return labelRes;
+        else
+            return {{}, ERROR_SYNTAX};
+    }
 }
 
 static ErrorCode _insertLabel(Label labelArray[], size_t* freeLabelCell, const String* curLine, const char* labelEnd,
