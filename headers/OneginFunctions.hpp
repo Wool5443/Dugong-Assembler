@@ -22,9 +22,9 @@ static const char* const IGNORED_SYMBOLS = " ,.;:'\"-!?`~()[]{}";
 struct Text
 {
     const char* rawText;
-    const String* lines;
+    const String* tokens;
     size_t size;
-    size_t numberOfLines;
+    size_t numberOfTokens;
 };
 
 /**
@@ -49,7 +49,7 @@ void DestroyText(Text* text);
  * @param [in] text - the text lines of which are to be sorted.
  * @param [in] sortType - the way to compare lines.
 */
-void SortTextLines(Text* text, StringCompareMethod sortType);
+void SortTextTokens(Text* text, StringCompareMethod sortType);
 
 /**
  * @brief Prints raw text form text to a file.
@@ -65,6 +65,6 @@ void PrintRawText(const Text* text, FILE* file);
  * @param[in] text - what to write.
  * @param [in, out] file - where to write.
 */
-void PrintTextLines(const Text* text, FILE* file);
+void PrintTextTokens(const Text* text, FILE* file);
 
 #endif
