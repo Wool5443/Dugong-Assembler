@@ -2,8 +2,6 @@
 #include "Utils.hpp"
 #include "time.h"
 
-static void selectionSort(void* data, size_t elementCount, size_t elementSize, CompareFunction_t* compareFunction);
-
 static void quickSort(void* start, void* end, size_t elementSize, CompareFunction_t* compareFunction);
 
 static void* partition(void* left, void* right, size_t elementSize, CompareFunction_t compareFunction);
@@ -39,18 +37,6 @@ void Sort(void* data, size_t elementCount, size_t elementSize, CompareFunction_t
 
 	quickSort(data, data + (elementCount - 1) * elementSize, elementSize, compareFunction);
 	// selectionSort(data, elementCount, elementSize, compareFunction);
-}
-
-static void selectionSort(void* data, size_t elementCount, size_t elementSize, CompareFunction_t* compareFunction)
-{
-	MyAssertHard(data, ERROR_NULLPTR);
-	MyAssertHard(compareFunction, ERROR_NO_COMPARATOR);
-
-	for (size_t i = 0; i < elementCount; i++)
-	{
-		void* temp = (void*)MinArray(data + i * elementSize, elementCount - i, elementSize, compareFunction);
-		Swap(data + i * elementSize, temp, elementSize);
-	}
 }
 
 static void quickSort(void* start, void* end, size_t elementSize, CompareFunction_t* compareFunction)

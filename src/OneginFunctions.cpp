@@ -8,11 +8,9 @@
 #include "StringFunctions.hpp"
 #include "Sort.hpp"
 
-size_t getFileSize(const char* path);
+size_t _countTokens(const char* string, char terminator);
 
-size_t countLines(const char* string);
-
-const String* split(const char* string, size_t numOfLines, char terminator);
+const String* _split(const char* string, size_t numOfTokens, char terminator);
 
 int _stringCompareStartToEnd(const void* s1, const void* s2);
 
@@ -20,15 +18,15 @@ int _stringCompareEndToStart(const void* s1, const void* s2);
 
 Text CreateText(const char* path, char terminator)
 {
-    MyAssertHard(path, ERROR_NULLPTR, );
+    MyAssertHard(path, ERROR_NULLPTR);
 
     Text text = {};
 
-    text.size = getFileSize(path);
+    text.size = GetFileSize(path);
     
     char* rawText = (char*)calloc(text.size + 2, sizeof(char));
 
-    rawText[text.size] = '\n';
+    rawText[text.size] = terminator;
     rawText[text.size + 1] = '\0';
 
     FILE* file = fopen(path, "rb");
@@ -38,9 +36,9 @@ Text CreateText(const char* path, char terminator)
 
     text.rawText = rawText;
 
-    text.numberOfLines = countLines(rawText);
+    text.numberOfTokens = _countTokens(rawText, terminator);
 
-    text.lines = split(text.rawText, text.numberOfLines, terminator);
+    text.tokens = _split(text.rawText, text.numberOfTokens, terminator);
 
     return text;
 }
@@ -48,22 +46,22 @@ Text CreateText(const char* path, char terminator)
 void DestroyText(Text* text)
 {
     MyAssertHard(text, ERROR_NULLPTR, );
-    free((void*)(text->lines));
+    free((void*)(text->tokens));
     free((void*)(text->rawText));
 }
 
-void SortTextLines(Text* text, StringCompareMethod sortType)
+void SortTextTokens(Text* text, StringCompareMethod sortType)
 {
     switch (sortType)
     {
         case START_TO_END:
-            Sort((void*)(text->lines), text->numberOfLines, sizeof((text->lines)[0]), _stringCompareStartToEnd);
+            Sort((void*)(text->tokens), text->numberOfTokens, sizeof((text->tokens)[0]), _stringCompareStartToEnd);
             break;
         case END_TO_START:
-            Sort((void*)(text->lines), text->numberOfLines, sizeof((text->lines)[0]), _stringCompareEndToStart);
+            Sort((void*)(text->tokens), text->numberOfTokens, sizeof((text->tokens)[0]), _stringCompareEndToStart);
             break;
         default:
-            Sort((void*)(text->lines), text->numberOfLines, sizeof((text->lines)[0]), _stringCompareStartToEnd);
+            Sort((void*)(text->tokens), text->numberOfTokens, sizeof((text->tokens)[0]), _stringCompareStartToEnd);
             break;
     }
 }
@@ -73,13 +71,13 @@ void PrintRawText(const Text* text, FILE* file)
     fputs(text->rawText, file);
 }
 
-void PrintTextLines(const Text* text, FILE* file)
+void PrintTextTokens(const Text* text, FILE* file, char terminator)
 {
-    for (size_t i = 0; i < text->numberOfLines; i++)
+    for (size_t i = 0; i < text->numberOfTokens; i++)
     {
-        const char* line = text->lines[i].text;
-        if (*line != '\n')
-            StringPrint(file, line, '\n');
+        const char* line = text->tokens[i].text;
+        if (*line != terminator)
+            StringPrint(file, line, terminator);
     }
 }
 
@@ -93,53 +91,43 @@ int _stringCompareEndToStart(const void* s1, const void* s2)
     return StringCompare((String*)s1, (String*)s2, END_TO_START, IGNORE_CASE, IGNORED_SYMBOLS);
 }
 
-size_t getFileSize(const char* path)
-{
-    MyAssertHard(path, ERROR_NULLPTR, );
-
-    struct stat result = {};
-    stat(path, &result);
-
-    return (size_t)result.st_size;
-}
-
-size_t countLines(const char* string)
+size_t _countTokens(const char* string, char terminator)
 {
     MyAssertHard(string, ERROR_NULLPTR, );
 
-    size_t lines = 1;
-    const char* newLineSymbol = strchr(string, '\n');
-    while (newLineSymbol != NULL)
+    size_t tokens = 1;
+    const char* newTokenSymbol = strchr(string, terminator);
+    while (newTokenSymbol != NULL)
     {
-        lines++;
-        newLineSymbol = strchr(newLineSymbol + 1, '\n');
+        tokens++;
+        newTokenSymbol = strchr(newTokenSymbol + 1, terminator);
     }
-    return lines;
+    return tokens;
 }
 
-const String* split(const char* string, size_t numOfLines, char terminator)
+const String* _split(const char* string, size_t numOfTokens, char terminator)
 {
-    MyAssertHard(string, ERROR_NULLPTR, );
+    MyAssertHard(string, ERROR_NULLPTR);
 
-    String* textLines = (String*)calloc(numOfLines, sizeof(textLines[0]));
+    String* textTokens = (String*)calloc(numOfTokens, sizeof(textTokens[0]));
 
-    MyAssertHard(textLines, ERROR_NO_MEMORY, );
+    MyAssertHard(textTokens, ERROR_NO_MEMORY);
 
-    const char* endCurLine = strchr(string, terminator);
+    const char* endCurToken = strchr(string, terminator);
 
-    textLines[0] = {.text = string,
-                    .length = (size_t)(endCurLine - string)};
+    textTokens[0] = {.text = string,
+                     .length = (size_t)(endCurToken - string)};
 
     size_t i = 1;
 
-    while (endCurLine)
+    while (endCurToken)
     {
-        textLines[i] = {};
-        textLines[i].text = endCurLine + 1;
-        endCurLine = strchr(endCurLine + 1, terminator);
-        textLines[i].length = endCurLine ? (size_t)(endCurLine - textLines[i].text) : 0;
+        textTokens[i] = {};
+        textTokens[i].text = endCurToken + 1;
+        endCurToken = strchr(endCurToken + 1, terminator);
+        textTokens[i].length = endCurToken ? (size_t)(endCurToken - textTokens[i].text) : 0;
         i++;
     }
 
-    return (const String*)textLines;
+    return (const String*)textTokens;
 }

@@ -12,12 +12,12 @@
 static const char* const IGNORED_SYMBOLS = " ,.;:'\"-!?`~()[]{}";
 
 /** @struct Text
- * @brief Text struct which contains text itself and lines of the text.
+ * @brief Text struct which contains text itself and tokens of the text.
  * 
  * @var Text::rawText - text.
- * @var Text::lines - const pointers to lines in rawText.
+ * @var Text::tokens - const pointers to tokens in rawText.
  * @var Text::size - number of bytes in text.
- * @var Text::numberOfLines - the length of lines.
+ * @var Text::numberOfTokens - the length of tokens.
 */
 struct Text
 {
@@ -44,10 +44,10 @@ Text CreateText(const char* path, char terminator);
 void DestroyText(Text* text);
 
 /**
- * @brief Sorts text's lines. Uses quick sort.
+ * @brief Sorts text's tokens. Uses quick sort.
  * 
- * @param [in] text - the text lines of which are to be sorted.
- * @param [in] sortType - the way to compare lines.
+ * @param [in] text - the text tokens of which are to be sorted.
+ * @param [in] sortType - the way to compare tokens.
 */
 void SortTextTokens(Text* text, StringCompareMethod sortType);
 
@@ -65,6 +65,6 @@ void PrintRawText(const Text* text, FILE* file);
  * @param[in] text - what to write.
  * @param [in, out] file - where to write.
 */
-void PrintTextTokens(const Text* text, FILE* file);
+void PrintTextTokens(const Text* text, FILE* file, char terminator);
 
 #endif
