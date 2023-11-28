@@ -54,13 +54,13 @@ struct Label
     double codePosition;
 };
 
-static ErrorCode _proccessLine(byte* codeArray, size_t* codePosition,
+static ErrorCode _proccessToken(byte* codeArray, size_t* codePosition,
                                Label labelArray[], size_t* freeLabelCell,
-                               String* curLine, FILE* listingFile,
+                               String* curToken, FILE* listingFile,
                                bool isSecondRun);
 
-static ErrorCode _insertLabel(Label* labelArray, size_t* freeLabelCell, const String* curLine, const char* labelEnd,
-                              size_t codePosition);
+static ErrorCode _insertLabel(Label* labelArray, size_t* freeLabelCell, const String* curToken,
+                              const char* labelEnd, size_t codePosition);
 
 static ArgResult _parseArg(const char* argStr, const Label labelArray[], bool isSecondRun);
 
@@ -77,19 +77,19 @@ static CodePositionResult _getLabelCodePosition(const Label labelArray[], const 
 static byte _translateCommandToBinFormat(Command command, byte argType);
 
 // too many args to be a separate function
-#define RUN_COMPILATION(isSecondRun)                                                                             \
+#define RUN_COMPILATION(isSecondRun)                                                                            \
     codePosition = 0;                                                                                           \
-    for (size_t lineIndex = 0; lineIndex < code.numberOfLines; lineIndex++)                                     \
+    for (size_t tokenIndex = 0; tokenIndex < code.numberOfTokens; tokenIndex++)                                 \
     {                                                                                                           \
-        const String* curLine = &code.lines[lineIndex];                                                         \
+        const String* curToken = &code.tokens[tokenIndex];                                                      \
                                                                                                                 \
-        ErrorCode proccessError = _proccessLine(codeArray, &codePosition, labelArray, &freeLabelCell,           \
-                                               (String*)curLine, listingFile, isSecondRun);                     \
+        ErrorCode proccessError = _proccessToken(codeArray, &codePosition, labelArray, &freeLabelCell,          \
+                                               (String*)curToken, listingFile, isSecondRun);                    \
                                                                                                                 \
         if (proccessError)                                                                                      \
         {                                                                                                       \
             SetConsoleColor(stdout, COLOR_RED);                                                                 \
-            printf("%s in line #%zu: \"%s\"\n", ERROR_CODE_NAMES[proccessError], lineIndex, curLine->text);     \
+            printf("%s in line #%zu: \"%s\"\n", ERROR_CODE_NAMES[proccessError], tokenIndex, curToken->text);   \
             SetConsoleColor(stdout, COLOR_WHITE);                                                               \
             FREE_JUNK;                                                                                          \
             return proccessError;                                                                               \
@@ -110,7 +110,7 @@ ErrorCode Compile(const char* codeFilePath, const char* binaryFilePath, const ch
 
     Text code = CreateText(codeFilePath, '\n');
 
-    byte* codeArray = (byte*)calloc(code.numberOfLines, sizeof(double) + 2);
+    byte* codeArray = (byte*)calloc(code.numberOfTokens, sizeof(double) + 2);
 
     Label  labelArray[MAX_LABELS] = {};
     size_t freeLabelCell = 0;
@@ -137,28 +137,28 @@ ErrorCode Compile(const char* codeFilePath, const char* binaryFilePath, const ch
     return EVERYTHING_FINE;
 }
 
-static ErrorCode _proccessLine(byte* codeArray, size_t* codePosition,
+static ErrorCode _proccessToken(byte* codeArray, size_t* codePosition,
                                Label labelArray[], size_t* freeLabelCell,
-                               String* curLine, FILE* listingFile,
+                               String* curToken, FILE* listingFile,
                                bool isSecondRun)
 {
-    ((char*)curLine->text)[curLine->length] = '\0';
+    ((char*)curToken->text)[curToken->length] = '\0';
 
-    char* commentPtr = (char*)strchr(curLine->text, ';');
+    char* commentPtr = (char*)strchr(curToken->text, ';');
     if (commentPtr)
         *commentPtr = '\0';
 
-    if (StringIsEmptyChars(curLine->text, '\0'))
+    if (StringIsEmptyChars(curToken->text, '\0'))
         return EVERYTHING_FINE;
 
-    const char* labelEnd = strchr(curLine->text, ':');
+    const char* labelEnd = strchr(curToken->text, ':');
     if (labelEnd)
     {
         if (isSecondRun)
         {
             if (commentPtr)
                 *commentPtr = ';';
-            fprintf(listingFile, "%82s%s\n", "", curLine->text);
+            fprintf(listingFile, "%82s%s\n", "", curToken->text);
             if (commentPtr)
                 *commentPtr = '\0';
             return EVERYTHING_FINE;
@@ -166,7 +166,7 @@ static ErrorCode _proccessLine(byte* codeArray, size_t* codePosition,
 
         if (labelEnd)
         {
-            ErrorCode labelError = _insertLabel(labelArray, freeLabelCell, curLine, labelEnd, *codePosition);
+            ErrorCode labelError = _insertLabel(labelArray, freeLabelCell, curToken, labelEnd, *codePosition);
             return labelError;
         }
     }
@@ -174,7 +174,7 @@ static ErrorCode _proccessLine(byte* codeArray, size_t* codePosition,
     char command[MAX_COMMAND_LENGTH + 1] = "";
     int commandLength = 0;
 
-    if (sscanf(curLine->text, "%4s%n", command, &commandLength) != 1)
+    if (sscanf(curToken->text, "%4s%n", command, &commandLength) != 1)
         return ERROR_SYNTAX;
 
     #define DEF_COMMAND(name, num, hasArg, ...)                                             \
@@ -185,7 +185,7 @@ static ErrorCode _proccessLine(byte* codeArray, size_t* codePosition,
                                                                                             \
         if (hasArg)                                                                         \
         {                                                                                   \
-            ArgResult argRes = _parseArg(curLine->text + commandLength + 1,                 \
+            ArgResult argRes = _parseArg(curToken->text + commandLength + 1,                 \
                                          labelArray, isSecondRun);                          \
             RETURN_ERROR(argRes.error);                                                     \
                                                                                             \
@@ -227,7 +227,7 @@ static ErrorCode _proccessLine(byte* codeArray, size_t* codePosition,
     if (commentPtr)
         *commentPtr = ';';
 
-    ON_SECOND_RUN(fprintf(listingFile, "%s\n", curLine->text));
+    ON_SECOND_RUN(fprintf(listingFile, "%s\n", curToken->text));
 
     return EVERYTHING_FINE;
 }
@@ -387,18 +387,18 @@ static ArgResult _parseImmedLabel(const char** argStr, const Label labelArray[],
     }
 }
 
-static ErrorCode _insertLabel(Label labelArray[], size_t* freeLabelCell, const String* curLine, const char* labelEnd,
+static ErrorCode _insertLabel(Label labelArray[], size_t* freeLabelCell, const String* curToken, const char* labelEnd,
                               size_t codePosition)
 {
     MyAssertSoft(labelArray, ERROR_NULLPTR);
     MyAssertSoft(freeLabelCell, ERROR_NULLPTR);
-    MyAssertSoft(curLine, ERROR_NULLPTR);
+    MyAssertSoft(curToken, ERROR_NULLPTR);
     MyAssertSoft(labelEnd, ERROR_NULLPTR);
 
     if (*freeLabelCell >= MAX_LABELS)
         return ERROR_TOO_MANY_LABELS;
 
-    const char* labelStart = curLine->text;
+    const char* labelStart = curToken->text;
 
     while (isspace(*labelStart) && labelStart < labelEnd) labelStart++;
 
